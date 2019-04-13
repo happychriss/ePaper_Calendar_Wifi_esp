@@ -5,22 +5,26 @@
 #include "string"
 #include "oauth.h"
 #include "helper.h"
+#include "time.h"
 #include <SoftwareSerial.h>
 #include "EEPROM.h"
+#include "cal_comm.h"
 
 //receivePin, transmitPin,
 SoftwareSerial swSer(12, 13, false, 256); //STM32: Weiß muss an RX, Grun an TX
 
-const char *ssid = "XXXXX";
-const char *password = "XXXXX;
 const char *host = "www.googleapis.com";
 
+char my_ssid[50] = {0};
+char my_pwd[50] = {0};
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored  "-Wdeprecated-declarations"
 
 
 WiFiClientSecure client;
+tm global_time;
+
 
 #pragma GCC diagnostic pop
 
@@ -31,13 +35,23 @@ char global_access_token[150] = "ya29.GluPBv80YVsTmc5uCIDt5AoEDbdoP-srm1zk7zzfF-
 
 // Set global variable attributes.
 uint8_t global_status;
+bool b_reset_authorization = false;
+
+
+// Commandos to Calendar
+#define CMD_READ_CALENDAR 1
+
+// If the calendar wants to get more data
+#define CALENDAR_READY 1
+#define CALANDAR_STATUS_MORE  2
+#define CALENDAR_STATUS_DONE  3
 
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
     swSer.begin(9600);
     int c;
-    bool b_reset_authorization = false;
+
     DPL("Key to start, 'x' to reset authentication");
     c = SerialKeyWait();
     DP("Typed:");
@@ -47,36 +61,13 @@ void setup() {
     }
 
 
-    SetupMyWifi(ssid, password);
-    EEPROM.begin(250);
-    EEPROM.get(0, rtcData);
-
-    if (CheckRTC()) {
-        DP("Status: ");
-        DPL(rtcData.status);
-        DP("Device-Code: ");
-        DPL(rtcData.device_code);
-        DP("Refresh-Token: ");
-        DPL(rtcData.refresh_token);
-        global_access_token[0] = 0;
-
-        if (b_reset_authorization) {
-            Serial.println("*Reset Google User access - set initial state*");
-            global_status = WIFI_INITIAL_STATE;
-        } else {
-            global_status = rtcData.status;
-        }
-
-    } else {
-        DPL("** Invalid RTC Status - Reauth");;
-        global_status = WIFI_INITIAL_STATE;
-    }
-
+    global_status=CAL_WAIT_READY;
 }
 
 
 void loop() {
 
+    int count = 0;
 
     DP("***** State:");
     DPD(global_status);
@@ -85,6 +76,63 @@ void loop() {
     String request;
 
     switch (global_status) {
+
+        case CAL_WAIT_READY:
+            Serial.print("Waiting for calender to be ready...");
+
+            while(WaitForCalendarStatus()!=CALENDAR_READY){}
+
+            global_status = CAL_WIFI_GET_CONFIG;
+            break;
+
+
+        case CAL_WIFI_GET_CONFIG:
+
+            Serial.println("Getting Wifi Config from Calendar..");
+
+            ReadFromCalendar(my_ssid);
+            DP("SSID:");DPL(my_ssid);
+
+            ReadFromCalendar(my_pwd);
+            DP("PWD: ");DPL(my_pwd);
+
+            global_status = WIFI_INIT;
+
+            break;
+
+        case WIFI_INIT:
+            Serial.println("Init Wifi");
+
+            SetupMyWifi(my_ssid, my_pwd);
+            SetupTimeSNTP(&global_time);
+
+            EEPROM.begin(250);
+            EEPROM.get(0, rtcData);
+
+            if (CheckRTC()) {
+                DP("Status: ");
+                DPL(rtcData.status);
+                DP("Device-Code: ");
+                DPL(rtcData.device_code);
+                DP("Refresh-Token: ");
+                DPL(rtcData.refresh_token);
+                global_access_token[0] = 0;
+
+                if (b_reset_authorization) {
+                    Serial.println("*Reset Google User access - set initial state*");
+                    global_status = WIFI_INITIAL_STATE;
+                } else {
+                    global_status = rtcData.status;
+                }
+
+            } else {
+                DPL("** Invalid RTC Status - Reauth");;
+                global_status = WIFI_INITIAL_STATE;
+            }
+            break;
+
+
+
 
         case WIFI_INITIAL_STATE:
             const char *user_code;
@@ -109,34 +157,11 @@ void loop() {
                 global_status = request_access_token();
                 break;
             }
-            global_status = CAL_WAIT_READY;
+            global_status = CAL_PAINT_UPDATE;
             break;
-
-        case CAL_WAIT_READY:
-            Serial.print("Waiting for calender to be ready...");
-
-            int c;
-
-            while (true) {
-                int in = swSer.available();
-                delay(50);
-                if (in > 0) break;
-            }
-
-            c = swSer.read();
-            Serial.print("Read:");Serial.println(c);
-
-            if (c == 2) {
-                global_status=CAL_PAINT_UPDATE;
-                    break;
-                }
-
-            break;
-
 
 
         case CAL_PAINT_UPDATE:
-
 
 
             if (global_access_token[0] == 0) {
@@ -144,24 +169,43 @@ void loop() {
                 break;
             }
 
-            DPL("******* Request Calendar Update  **********");
 
             swSer.write(0x2d);
             swSer.write(0x5a);
-            #define CMD_READ_CALENDAR 1
+
+
+            // Send Commando to calendar: Request calendar infos and request form Google
+
             swSer.write(CMD_READ_CALENDAR);
-            swSer.flush();
-            delay(100);
+            char time[22];
+            strftime(time, sizeof(time), "%Y %m %d %H:%M:%S", &global_time);
+            DP("******* Request Calendar Update with time-stamp:"); DPL(time);
+            WriteToCalendar(time);
 
-            request = ReadSWSer();
 
-            DP("Request received: "); DPL(request);
 
-            if (calendarGetRequest(host, request)) {
-                DPL("******* SUCCESS*******");
-            } else {
-                DPL("******* ERROR*******");
+            while(true) {
+                DPL("Wait Calendar Ready");
+                while(WaitForCalendarStatus()!=CALENDAR_READY){}
+                request = ReadSWSer();
+
+                DP("***************************   Request received: ");
+                DPL(request);
+
+                if (calendarGetRequest(host, request)) {
+                    DPL("******* SUCCESS*******");
+                } else {
+                    DPL("******* ERROR*******");
+                }
+
+                DPL("Wait Calendar DONE");
+                if (WaitForCalendarStatus()==CALENDAR_STATUS_DONE) {
+                    break;
+                }
+
             }
+
+            DP("***************************   Requests done");
 
             global_status = CAL_PAINT_DONE;
 
@@ -172,7 +216,8 @@ void loop() {
             while (true) {
                 yield();
                 int c = SerialKeyWait();
-                Serial.print("Typed:");Serial.println(c);
+                Serial.print("Typed:");
+                Serial.println(c);
                 if (c == 120) {
                     global_status = WIFI_INITIAL_STATE;
                 } else {

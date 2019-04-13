@@ -5,7 +5,7 @@
 #ifndef ESP8266_WIFI_HELPER_H
 #define ESP8266_WIFI_HELPER_H
 
-
+#define TIME_ZONE -6
 
 struct rtcDataStruct {
     uint32_t crc32;   // 4 bytes
@@ -16,12 +16,14 @@ struct rtcDataStruct {
 
 
 static const int ERROR_STATE = -1;
-static const int WIFI_INITIAL_STATE = 1; //request user code
-static const int WIFI_AWAIT_CHALLENGE = 2;
-static const int WIFI_CHECK_ACCESS_TOKEN=3;
-static const int CAL_WAIT_READY = 4;
-static const int CAL_PAINT_UPDATE = 5;
-static const int CAL_PAINT_DONE = 6;
+static const int CAL_WIFI_GET_CONFIG = 1;
+static const int WIFI_INIT = 2;
+static const int WIFI_INITIAL_STATE = 3; //request user code
+static const int WIFI_AWAIT_CHALLENGE = 4;
+static const int WIFI_CHECK_ACCESS_TOKEN=5;
+static const int CAL_WAIT_READY = 6;
+static const int CAL_PAINT_UPDATE = 7;
+static const int CAL_PAINT_DONE = 8;
 
 #define MYDEBUG
 

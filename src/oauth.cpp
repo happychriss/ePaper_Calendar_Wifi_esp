@@ -16,7 +16,8 @@
 
 // OAUTH2 Client credentials
 const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
-const String scope = "https://www.googleapis.com/auth/calendar";
+const String scope = "https://www.googleapis.com/auth/calendar.readonly";
+//const String scope = "https://www.googleapis.com/auth/calendar";
 const String auth_uri = "https://accounts.google.com/o/oauth2/auth";
 const String code_uri = "https://accounts.google.com/o/oauth2/device/code";
 const String info_uri = "/oauth2/v3/tokeninfo";
@@ -132,13 +133,19 @@ void SetupMyWifi(const char *ssid, const char *password) {
     }
     Serial.println("");
     Serial.println("WiFi connected");
-    Serial.println("IP address: ");
+    Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
+}
 
+
+void SetupTimeSNTP(tm *timeinfo) {
     // Synchronize time useing SNTP. This is necessary to verify that
 // the TLS certificates offered by the server are currently valid.
+
+    struct tm * my_timeinfo;
     Serial.print("Setting time using SNTP");
-    configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
     time_t now = time(nullptr);
     while (now < 8 * 3600 * 2) {
         delay(500);
@@ -146,10 +153,15 @@ void SetupMyWifi(const char *ssid, const char *password) {
         now = time(nullptr);
     }
     Serial.println("");
-    struct tm timeinfo;
-    gmtime_r(&now, &timeinfo);
+
+    gmtime_r(&now, timeinfo);
+    timeinfo->tm_hour=timeinfo->tm_hour+TIME_ZONE;
+    mktime(timeinfo);
+
     Serial.print("Current time: ");
-    Serial.print(asctime(&timeinfo));
+    Serial.print(asctime(timeinfo));
+
+
 }
 
 // Root certificate used by google at  https://pki.goog/
@@ -389,7 +401,7 @@ uint8_t request_access_token() {
     DP("Function: ");
     DPL("request_access_token");
 
-    uint8_t my_status = CAL_WAIT_READY;
+    uint8_t my_status = CAL_PAINT_UPDATE;
 
     String postData = "";
     postData += "&client_id=" + client_id;

@@ -20,6 +20,7 @@ extern const char *host;
 String ReadSWSer();
 uint8_t request_access_token();
 
+void SetupTimeSNTP(tm *timeinfo);
 void SetupMyWifi(const char *ssid, const char *password);
 int SerialKeyWait();
 
