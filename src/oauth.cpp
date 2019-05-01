@@ -24,6 +24,7 @@ const String info_uri = "/oauth2/v3/tokeninfo";
 const String token_uri = "/oauth2/v4/token";
 
 
+
 const int httpsPort = 443;
 
 
@@ -50,19 +51,6 @@ String ReadSWSer() {
 }
 
 
-void EEPromMemoryRead(uint32_t offset, uint32_t *data, size_t size) {
-    uint addr = offset;
-    EEPROM.get(addr, data);
-
-}
-
-void EEPromMemoryWrite(uint32_t offset, uint32_t *data, size_t size) {
-    uint addr = offset;
-    EEPROM.put(addr, data);
-    EEPROM.commit();
-};
-
-
 uint32_t calculateCRC32(const uint8_t *data, size_t length) {
     uint32_t crc = 0xffffffff;
     while (length--) {
@@ -83,6 +71,48 @@ uint32_t calculateCRC32(const uint8_t *data, size_t length) {
     return crc;
 }
 
+
+void RTC_OAuthWrite() {
+    rtcOAuth.crc32 = calculateCRC32(((uint8_t *) &rtcOAuth) + 4, sizeof(rtcOAuth) - 4);
+
+    uint addr = 0;
+    EEPROM.put(addr, rtcOAuth);
+    EEPROM.commit();
+}
+
+
+void RTC_WakeUpWrite() {
+    rtcWakeUp.crc32 = calculateCRC32(((uint8_t *) &rtcWakeUp) + 4, sizeof(rtcWakeUp) - 4);
+
+    uint addr = sizeof(rtcOAuth)+1;
+    EEPROM.put(addr, rtcWakeUp);
+    EEPROM.commit();
+}
+
+
+bool RTC_OAuthRead() {
+
+    bool rtcValid = false;
+    EEPROM.get(0, rtcOAuth);
+
+    // Calculate the CRC of what we just read from RTC memory, but skip the first 4 bytes as that's the checksum itself.
+    uint32_t crc = calculateCRC32(((uint8_t *) &rtcOAuth) + 4, sizeof(rtcOAuth) - 4);
+    if (crc == rtcOAuth.crc32) {
+        rtcValid = true;
+        DPL("RTC: OAuth-Read - Valid RTC");
+        DPL(crc);
+
+    } else {
+        memset(&rtcOAuth, 0, sizeof(rtcDataOauthStruct));
+        DPL("RTC: OAuth-Read-  InValid RTC");
+    }
+
+    return rtcValid;
+
+
+}
+
+/*
 bool CheckRTC() {
 
     bool rtcValid = false;
@@ -101,6 +131,51 @@ bool CheckRTC() {
 
     return rtcValid;
 }
+*/
+
+
+bool RTC_WakeUpRead() {
+    uint addr = sizeof(rtcDataOauthStruct)+1; //just take next place in EEPROM
+
+    EEPROM.get(addr, rtcWakeUp);
+    bool rtcValid = false;
+
+    // Calculate the CRC of what we just read from RTC memory, but skip the first 4 bytes as that's the checksum itself.
+    uint32_t crc = calculateCRC32(((uint8_t *) &rtcWakeUp) + 4, sizeof(rtcWakeUp) - 4);
+
+    if (crc == rtcWakeUp.crc32) {
+        rtcValid = true;
+        DPL("RTC: Wakeup-Read - Valid RTC");
+
+    } else {
+        memset(&rtcWakeUp, 0, sizeof(rtcWakeUp));
+        DPL("RTC: Wakeup-Read - InValid RTC");
+    }
+
+    return rtcValid;
+
+}
+
+
+/*bool CheckRTC() {
+
+    bool rtcValid = false;
+
+    EEPROM.get(0, rtcData);
+// Calculate the CRC of what we just read from RTC memory, but skip the first 4 bytes as that's the checksum itself.
+    uint32_t crc = calculateCRC32(((uint8_t *) &rtcData) + 4, sizeof(rtcData) - 4);
+    if (crc == rtcData.crc32) {
+        rtcValid = true;
+        DPL("Valid RTC");
+        DPL(crc);
+
+    } else {
+        memset(&rtcData, 0, sizeof(struct rtcDataOauthStruct));
+        DPL("InValid RTC");
+    }
+
+    return rtcValid;
+}*/
 
 
 int SerialKeyWait() {// Wait for Key
@@ -121,20 +196,31 @@ int SerialKeyWait() {// Wait for Key
 }
 
 
-void SetupMyWifi(const char *ssid, const char *password) {
+bool SetupMyWifi(const char *ssid, const char *password) {
     Serial.println();
     Serial.print("connecting to ");
     Serial.println(ssid);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
+
+    uint8_t try_count=100;
+
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
+        try_count--;
+        if (try_count==0) break;
     }
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
+
+    if (try_count==0) {
+        DPL("");
+        DPL("WIFI Connection ERROR");
+        return true;
+    }
+
+    DPL("");
+    DP("WiFi connected with IP address:");DPL(WiFi.localIP());
+    return false;
 }
 
 
@@ -405,7 +491,7 @@ uint8_t request_access_token() {
 
     String postData = "";
     postData += "&client_id=" + client_id;
-    postData += "&refresh_token=" + String(rtcData.refresh_token);
+    postData += "&refresh_token=" + String(rtcOAuth.refresh_token);
     postData += "&client_secret=1Ta9KtGVZbDb0D1WicO5kz9G";
     postData += "&grant_type=refresh_token";
 
@@ -448,8 +534,7 @@ uint8_t poll_authorization_server() {
     DP("Function: ");
     DPL("poll authorization server()");
 
-    String device_code = String(rtcData.device_code);
-
+    String device_code = String(rtcOAuth.device_code);
 
     String postData = "";
     postData += "&client_id=" + client_id;
@@ -473,11 +558,11 @@ uint8_t poll_authorization_server() {
     uint8_t my_status = WIFI_AWAIT_CHALLENGE;
     uint8_t try_count = 0;
 
+    #define MAX_TRY_COUNT 30
 
     do {
 
-        Serial.print("Polling for authorization server, try #: ");
-        Serial.println(try_count);
+        DP("Polling for authorization server, try #: ");DP(try_count);DP(" of ");DPL(MAX_TRY_COUNT);
 
         json = postRequest(host, postHeader, postData);
 
@@ -491,14 +576,12 @@ uint8_t poll_authorization_server() {
             memcpy(global_access_token, local_access_token, strlen(local_access_token));
 
             const char *refresh_token = root["refresh_token"];
-            rtcData.status = WIFI_CHECK_ACCESS_TOKEN;
-            memset(rtcData.refresh_token, 0, sizeof(rtcData.refresh_token));
-            memcpy(rtcData.refresh_token, refresh_token, strlen(refresh_token));
-            rtcData.crc32 = calculateCRC32(((uint8_t *) &rtcData) + 4, sizeof(rtcData) - 4);
 
-            EEPROM.put(0, rtcData);
-            EEPROM.commit();
-
+            // Update RTC with Refresh Token
+            rtcOAuth.status = WIFI_CHECK_ACCESS_TOKEN;
+            memset(rtcOAuth.refresh_token, 0, sizeof(rtcOAuth.refresh_token));
+            memcpy(rtcOAuth.refresh_token, refresh_token, strlen(refresh_token));
+            RTC_OAuthWrite();
 
             DPL("**** RESULTS in Strings *****");
             DPL(device_code);
@@ -513,18 +596,22 @@ uint8_t poll_authorization_server() {
             const char *error_description = root["error_description"];
             DPL(error_description);
             try_count++;
+            delay(1000);
 
         }
 
-    } while (my_status == WIFI_AWAIT_CHALLENGE and try_count < 3);
+    } while (my_status == WIFI_AWAIT_CHALLENGE and try_count < MAX_TRY_COUNT);
 
     // Did not work...need to re-initialise device
     if (my_status == WIFI_AWAIT_CHALLENGE) {
-        Serial.println("Challenge failed - Restart Initialization");
-        const uint8_t invalid_rtc = 0;
-        EEPROM.put(0, invalid_rtc);
-        EEPROM.commit();
+
         my_status = WIFI_INITIAL_STATE;
+
+        Serial.println("Challenge failed - Restart Initialization");
+
+        memset(&rtcOAuth, 0, sizeof(rtcOAuth));
+        rtcOAuth.status=my_status;
+        RTC_OAuthWrite();
     }
 
     return my_status;
@@ -564,19 +651,10 @@ const char *request_user_and_device_code() {
     DP("User Code: ");
     DPL(user_code);
 
-    rtcData.status = WIFI_AWAIT_CHALLENGE;
-    memset(rtcData.device_code, 0, sizeof(rtcData.device_code));
-    memcpy(rtcData.device_code, device_code, strlen(device_code));
-    rtcData.crc32 = calculateCRC32(((uint8_t *) &rtcData) + 4, sizeof(rtcData) - 4);
-    EEPROM.put(0, rtcData);
-    EEPROM.commit();
-
-    rtcDataStruct myrtc = {0};
-    EEPROM.get(0, myrtc);
-
-    DPL("EEPROM-READ");
-    DPL(myrtc.status);
-    DPL(myrtc.device_code);
+    rtcOAuth.status = WIFI_AWAIT_CHALLENGE;
+    memset(rtcOAuth.device_code, 0, sizeof(rtcOAuth.device_code));
+    memcpy(rtcOAuth.device_code, device_code, strlen(device_code));
+    RTC_OAuthWrite();
 
     return user_code;
 

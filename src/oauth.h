@@ -8,12 +8,17 @@
 
 #include <SoftwareSerial.h>
 
-void EEPromMemoryRead(uint32_t offset, uint32_t *data, size_t size);
-void EEPromMemoryWrite(uint32_t offset, uint32_t *data, size_t size);
+void RTC_OAuthWrite();
+
+bool RTC_OAuthRead();
+void RTC_WakeUpWrite();
+bool RTC_WakeUpRead();
 
 extern uint8_t global_status ;
 
-extern struct rtcDataStruct rtcData;
+extern struct rtcDataOauthStruct rtcOAuth;
+extern struct rtcDataWakeupStruct rtcWakeUp;
+
 extern char global_access_token[150];
 extern SoftwareSerial swSer;
 extern const char *host;
@@ -21,7 +26,7 @@ String ReadSWSer();
 uint8_t request_access_token();
 
 void SetupTimeSNTP(tm *timeinfo);
-void SetupMyWifi(const char *ssid, const char *password);
+bool SetupMyWifi(const char *ssid, const char *password);
 int SerialKeyWait();
 
 extern const char * request_user_and_device_code();
