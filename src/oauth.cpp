@@ -11,7 +11,7 @@
 #include "ArduinoJson.h"
 #include "helper.h"
 #include "oauth.h"
-#include "EEPROM.h"
+
 // #include <CertStoreBearSSL.h>
 
 // OAUTH2 Client credentials
@@ -28,198 +28,30 @@ const String token_uri = "/oauth2/v4/token";
 const int httpsPort = 443;
 
 
-String ReadSWSer() {
-
-    char buffer[200] = {};
-    uint8_t bytes_read = 0;
-    int c;
-
-    while (true) {
-
-        c = swSer.read();
-        delay(50);
-        if (((c == 0) || (c == -1))) {
-            break;
-        }
-
-        buffer[bytes_read++] = (char) c;
-    }
-
-    buffer[bytes_read] = 0;
-    String result((char *) buffer);
-    return result;
-}
-
-
-uint32_t calculateCRC32(const uint8_t *data, size_t length) {
-    uint32_t crc = 0xffffffff;
-    while (length--) {
-        uint8_t c = *data++;
-        for (uint32_t i = 0x80; i > 0; i >>= 1) {
-            bool bit = crc & 0x80000000;
-            if (c & i) {
-                bit = !bit;
-            }
-
-            crc <<= 1;
-            if (bit) {
-                crc ^= 0x04c11db7;
-            }
-        }
-    }
-
-    return crc;
-}
-
-
-void RTC_OAuthWrite() {
-    rtcOAuth.crc32 = calculateCRC32(((uint8_t *) &rtcOAuth) + 4, sizeof(rtcOAuth) - 4);
-
-    uint addr = 0;
-    EEPROM.put(addr, rtcOAuth);
-    EEPROM.commit();
-}
-
-
-void RTC_WakeUpWrite() {
-    rtcWakeUp.crc32 = calculateCRC32(((uint8_t *) &rtcWakeUp) + 4, sizeof(rtcWakeUp) - 4);
-
-    uint addr = sizeof(rtcOAuth)+1;
-    EEPROM.put(addr, rtcWakeUp);
-    EEPROM.commit();
-}
-
-
-bool RTC_OAuthRead() {
-
-    bool rtcValid = false;
-    EEPROM.get(0, rtcOAuth);
-
-    // Calculate the CRC of what we just read from RTC memory, but skip the first 4 bytes as that's the checksum itself.
-    uint32_t crc = calculateCRC32(((uint8_t *) &rtcOAuth) + 4, sizeof(rtcOAuth) - 4);
-    if (crc == rtcOAuth.crc32) {
-        rtcValid = true;
-        DPL("RTC: OAuth-Read - Valid RTC");
-        DPL(crc);
-
-    } else {
-        memset(&rtcOAuth, 0, sizeof(rtcDataOauthStruct));
-        DPL("RTC: OAuth-Read-  InValid RTC");
-    }
-
-    return rtcValid;
-
-
-}
-
-/*
-bool CheckRTC() {
-
-    bool rtcValid = false;
-
-    EEPROM.get(0, rtcData);
-// Calculate the CRC of what we just read from RTC memory, but skip the first 4 bytes as that's the checksum itself.
-    uint32_t crc = calculateCRC32(((uint8_t *) &rtcData) + 4, sizeof(rtcData) - 4);
-    if (crc == rtcData.crc32) {
-        rtcValid = true;
-        DPL("Valid RTC");
-        DPL(crc);
-
-    } else {
-        DPL("InValid RTC");
-    }
-
-    return rtcValid;
-}
-*/
-
-
-bool RTC_WakeUpRead() {
-    uint addr = sizeof(rtcDataOauthStruct)+1; //just take next place in EEPROM
-
-    EEPROM.get(addr, rtcWakeUp);
-    bool rtcValid = false;
-
-    // Calculate the CRC of what we just read from RTC memory, but skip the first 4 bytes as that's the checksum itself.
-    uint32_t crc = calculateCRC32(((uint8_t *) &rtcWakeUp) + 4, sizeof(rtcWakeUp) - 4);
-
-    if (crc == rtcWakeUp.crc32) {
-        rtcValid = true;
-        DPL("RTC: Wakeup-Read - Valid RTC");
-
-    } else {
-        memset(&rtcWakeUp, 0, sizeof(rtcWakeUp));
-        DPL("RTC: Wakeup-Read - InValid RTC");
-    }
-
-    return rtcValid;
-
-}
-
-
-/*bool CheckRTC() {
-
-    bool rtcValid = false;
-
-    EEPROM.get(0, rtcData);
-// Calculate the CRC of what we just read from RTC memory, but skip the first 4 bytes as that's the checksum itself.
-    uint32_t crc = calculateCRC32(((uint8_t *) &rtcData) + 4, sizeof(rtcData) - 4);
-    if (crc == rtcData.crc32) {
-        rtcValid = true;
-        DPL("Valid RTC");
-        DPL(crc);
-
-    } else {
-        memset(&rtcData, 0, sizeof(struct rtcDataOauthStruct));
-        DPL("InValid RTC");
-    }
-
-    return rtcValid;
-}*/
-
-
-int SerialKeyWait() {// Wait for Key
-//    Serial.setDebugOutput(true);
-
-    Serial.println("Hit a key to start...");
-    Serial.flush();
-
-    while (true) {
-        int inbyte = Serial.available();
-        delay(500);
-        if (inbyte > 0) break;
-    }
-
-    return Serial.read();
-
-
-}
-
-
 bool SetupMyWifi(const char *ssid, const char *password) {
-    Serial.println();
-    Serial.print("connecting to ");
-    Serial.println(ssid);
+    CPL();
+    CP("connecting to ");
+    CPL(ssid);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 
-    uint8_t try_count=100;
+    uint16_t try_count=500;
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
-        Serial.print(".");
+        DP(".");
         try_count--;
         if (try_count==0) break;
     }
 
     if (try_count==0) {
-        DPL("");
-        DPL("WIFI Connection ERROR");
+        CPL("");
+        CPL("WIFI Connection ERROR");
         return true;
     }
 
-    DPL("");
-    DP("WiFi connected with IP address:");DPL(WiFi.localIP());
+    CPL("");
+    CP("WiFi connected with IP address:");DPL(WiFi.localIP());
     return false;
 }
 
@@ -228,24 +60,23 @@ void SetupTimeSNTP(tm *timeinfo) {
     // Synchronize time useing SNTP. This is necessary to verify that
 // the TLS certificates offered by the server are currently valid.
 
-    struct tm * my_timeinfo;
-    Serial.print("Setting time using SNTP");
+    CPL("Setting time using SNTP");
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
 
     time_t now = time(nullptr);
     while (now < 8 * 3600 * 2) {
         delay(500);
-        Serial.print(".");
+        DP(".");
         now = time(nullptr);
     }
-    Serial.println("");
+    DPL("");
 
     gmtime_r(&now, timeinfo);
     timeinfo->tm_hour=timeinfo->tm_hour+TIME_ZONE;
     mktime(timeinfo);
 
-    Serial.print("Current time: ");
-    Serial.print(asctime(timeinfo));
+    CPL();DPL("*** Current time: ");
+    CPL(asctime(timeinfo));
 
 
 }
@@ -511,7 +342,7 @@ uint8_t request_access_token() {
 
     if (root.containsKey("access_token")) {
 
-        Serial.println("Refreshing Access Token");
+        DPL("Refreshing Access Token");
 
         const char *local_access_token = root["access_token"];
         memset(global_access_token, 0, sizeof(global_access_token));
@@ -570,7 +401,7 @@ uint8_t poll_authorization_server() {
 
         if (root.containsKey("access_token")) {
 
-            Serial.println("Getting Token");
+            DPL("Getting Token");
 
             const char *local_access_token = root["access_token"];
             memcpy(global_access_token, local_access_token, strlen(local_access_token));
@@ -607,7 +438,7 @@ uint8_t poll_authorization_server() {
 
         my_status = WIFI_INITIAL_STATE;
 
-        Serial.println("Challenge failed - Restart Initialization");
+        DPL("Challenge failed - Restart Initialization");
 
         memset(&rtcOAuth, 0, sizeof(rtcOAuth));
         rtcOAuth.status=my_status;
@@ -675,7 +506,7 @@ void authorize_old() {
         URL += "&access_type=" + urlencode(access_type);
         DPL("Goto URL: ");
         DPL(URL);DPL();
-        Serial.print("Enter code: ");
+        DP("Enter code: ");
         global_status = WIFI_AWAIT_CHALLENGE;
     } else {
         global_status = INFO;

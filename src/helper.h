@@ -36,9 +36,10 @@ static const int CAL_PAINT_DONE = 9;
 static const int ESP_START_SLEEP = 10;
 static const int ESP_SEND_ERROR_MSG = 11;
 
-#define MYDEBUG
+//#define MYDEBUG
 
 #ifdef MYDEBUG
+#define MYDEBUG_CORE
 #define DP(x)     Serial.print (x)
 #define DPD(x)     Serial.print (x, DEC)
 #define DPL(x)  Serial.println (x)
@@ -47,5 +48,20 @@ static const int ESP_SEND_ERROR_MSG = 11;
 #define DPD(x)
 #define DPL(x)
 #endif
+
+
+//#define MYDEBUG_CORE
+
+#ifdef MYDEBUG_CORE
+#define CP(x)     Serial.print (x)
+#define CPD(x)     Serial.print (x, DEC)
+#define CPL(x)  Serial.println (x)
+#else
+#define CP(x)
+#define CPD(x)
+#define CPL(x)
+#endif
+
+
 
 #endif //ESP8266_WIFI_HELPER_H

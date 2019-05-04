@@ -1,5 +1,5 @@
-#define WAKE_UP_HOUR 2
-#define WAKE_UP_MIN 10
+#define WAKE_UP_HOUR 11
+#define WAKE_UP_MIN 27
 
 #include <ESP8266WiFi.h>
 //#include <WiFiClientSecureBearSSL.h>
@@ -11,24 +11,8 @@
 #include <SoftwareSerial.h>
 #include "EEPROM.h"
 #include "cal_comm.h"
+#include <support.h>
 
-// source: https://github.com/markszabo/IRremoteESP8266/blob/master/src/IRutils.cpp#L48
-String uint64ToString(uint64_t input) {
-    String result = "";
-    uint8_t base = 10;
-
-    do {
-        char c = input % base;
-        input /= base;
-
-        if (c < 10)
-            c += '0';
-        else
-            c += 'A' - 10;
-        result = c + result;
-    } while (input);
-    return result;
-}
 
 
 //receivePin, transmitPin,
@@ -67,6 +51,7 @@ bool b_reset_authorization = false;
 
 #define PIN_POWER_CAL 15 // D15
 
+
 // Commands to Calendar
 #define CMD_READ_CALENDAR 1
 #define CMD_SHUTDOWN_CALENDAR 2
@@ -81,17 +66,18 @@ bool b_reset_authorization = false;
 
 
 void setup() {
+
     pinMode(PIN_POWER_CAL, OUTPUT);
     digitalWrite(PIN_POWER_CAL, LOW);
     swSer.begin(9600);
     EEPROM.begin(250);
 
-//#define WAIT_SERIAL
-    Serial.begin(115200);
-#ifdef WAIT_SERIAL
+// #define WAIT_SERIAL
 
+#ifdef WAIT_SERIAL
+    Serial.begin(115200);
     int c;
-    Serial.println("max deep sleep: " + uint64ToString(ESP.deepSleepMax()));
+    DPL("max deep sleep: " + uint64ToString(ESP.deepSleepMax()));
     DPL("Key to start, 'x' to reset authentication");
     c = SerialKeyWait();
     DP("Typed:");
@@ -108,36 +94,37 @@ void loop() {
 
 
 
-    DP("************** State:");DPD(global_status);DPL(" ****************");
+    CP("************** State:");CPD(global_status);CPL(" ****************");
 
     String request;
 
     switch (global_status) {
 
         case WAKE_UP_FROM_SLEEP:
+
             if (RTC_WakeUpRead()) {
 
                 if (rtcWakeUp.wakeup_count > 1) {
-                    DP("DeepSleep for Max-Time with count:");DPL(rtcWakeUp.wakeup_count);
+                    CP("DeepSleep for Max-Time with count:");CPL(rtcWakeUp.wakeup_count);
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
-                    ESP.deepSleep(ESP.deepSleepMax());
+                    ESP.deepSleep(ESP.deepSleepMax()/10);
                 }
 
                 if (rtcWakeUp.wakeup_count == 1) {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
-                    DP("DeepSleep for min:");DPL(rtcWakeUp.remaining_sleep_min);
-                    ESP.deepSleep(rtcWakeUp.remaining_sleep_min * 60000);
+                    CP("DeepSleep for min:");CPL(rtcWakeUp.remaining_sleep_min);
+                    ESP.deepSleep((rtcWakeUp.remaining_sleep_min * 60000000)/10);
                 }
 
                 if (rtcWakeUp.wakeup_count == 0) {
                     global_status = CAL_WAIT_READY;
-                    DPL("DeepSleep: DONE - Start Calendar Flow");
+                    CPL("DeepSleep: DONE - Start Calendar Flow");
                 }
             } else {
                 global_status = CAL_WAIT_READY;
-                DPL("DeepSleep: No Valid RTC found - Start Calendar Flow");
+                CPL("DeepSleep: No Valid RTC found - Start Calendar Flow");
             }
 
 
@@ -146,7 +133,7 @@ void loop() {
         case CAL_WAIT_READY:
             digitalWrite(PIN_POWER_CAL, HIGH);
             delay(1000);
-            DPL("Waiting for calender to be ready...");
+            CPL("Waiting for calender to be ready...");
 
             while (WaitForCalendarStatus() != CALENDAR_READY) {}
 
@@ -156,22 +143,22 @@ void loop() {
 
         case CAL_WIFI_GET_CONFIG:
 
-            DPL("Getting Wifi Config from Calendar..");
+            CPL("Getting Wifi Config from Calendar..");
 
             ReadFromCalendar(my_ssid);
-            DP("SSID:");
-            DPL(my_ssid);
+            CP("SSID:");
+            CPL(my_ssid);
 
             ReadFromCalendar(my_pwd);
-            DP("PWD: ");
-            DPL(my_pwd);
+            CP("PWD: ");
+            CPL(my_pwd);
 
             global_status = WIFI_INIT;
 
             break;
 
         case WIFI_INIT:
-            DPL("Init Wifi");
+            CPL("Init Wifi");
 
             if (SetupMyWifi(my_ssid, my_pwd)) {
              error_msg=strdup(" - WIFI Connection ERROR!");
@@ -181,26 +168,27 @@ void loop() {
 
             SetupTimeSNTP(&global_time);
 
+
             if (RTC_OAuthRead()) {
-                DP("Status: ");
-                DPL(rtcOAuth.status);
-                DP("Device-Code: ");
-                DPL(rtcOAuth.device_code);
-                DP("Refresh-Token: ");
-                DPL(rtcOAuth.refresh_token);
-                DP("Wakeup_Count: ");
+                CPL("** OAUTH RTC Status");
+                CP("Status: ");
+                CPL(rtcOAuth.status);
+                CP("Device-Code: ");
+                CPL(rtcOAuth.device_code);
+                CP("Refresh-Token: ");
+                CPL(rtcOAuth.refresh_token);
 
                 global_access_token[0] = 0;
 
                 if (b_reset_authorization) {
-                    DPL("*Reset Google User access - set initial state*");
+                    CPL("*Reset Google User access - set initial state*");
                     global_status = WIFI_INITIAL_STATE;
                 } else {
                     global_status = rtcOAuth.status;
                 }
 
             } else {
-                DPL("** Invalid RTC Status - Reauth");;
+                CPL("** Invalid RTC Status - Reauth");;
                 global_status = WIFI_INITIAL_STATE;
             }
 
@@ -219,12 +207,12 @@ void loop() {
             swSer.write(CMD_SHOW_USERCODE_CALENDAR);
             WriteToCalendar(my_user_code);
 
-            Serial.println("*********************");
-            Serial.print("USER-CODE:  ");
-            Serial.println(user_code);
-            Serial.println("*********************");
+            CPL("*********************");
+            CP("USER-CODE:  ");
+            CPL(user_code);
+            CP("*********************");
 
-            DPL("Wait Calendar - UserCode  DONE");
+            CPL("Wait Calendar - UserCode  DONE");
             if (WaitForCalendarStatus() == CALENDAR_STATUS_DONE) {
                 break;
             }
@@ -233,14 +221,18 @@ void loop() {
             break;
 
         case WIFI_AWAIT_CHALLENGE:
-            Serial.print("Await challenge for Device:");
-            Serial.println(rtcOAuth.device_code);
+            CP("Await challenge for Device:");
+            CPL(rtcOAuth.device_code);
             global_status = poll_authorization_server();
             break;
 
         case WIFI_CHECK_ACCESS_TOKEN:
+//xxx
+//            global_status = ESP_START_SLEEP;
+//            break;
+
             if (global_access_token[0] == 0) {
-                Serial.print("Refresh Access Token");
+                CPL("Refresh Access Token");
                 global_status = request_access_token();
                 break;
             }
@@ -250,10 +242,6 @@ void loop() {
 
         case CAL_PAINT_UPDATE:
 
-            //xxx REMOVE ME !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-//            global_status = ESP_START_SLEEP;
-//            break;
-
             if (global_access_token[0] == 0) {
                 global_status = request_access_token();
                 break;
@@ -261,19 +249,18 @@ void loop() {
 
 
             // Send Commando to calendar: Request calendar infos and request form Google
-
             swSer.write(0x2d);
             swSer.write(0x5a);
             swSer.write(CMD_READ_CALENDAR);
 
 
             strftime(str_time, sizeof(str_time), "%Y %m %d %H:%M:%S", &global_time);
-            DP("******* Request Calendar Update with time-stamp:");
-            DPL(str_time);
+            CP("******* Request Calendar Update with time-stamp:");
+            CPL(str_time);
             WriteToCalendar(str_time);
 
             while (true) {
-                DPL("Wait Calendar Ready");
+                CPL("Wait Calendar Ready");
                 while (WaitForCalendarStatus() != CALENDAR_READY) {}
                 request = ReadSWSer();
 
@@ -281,19 +268,19 @@ void loop() {
                 DPL(request);
 
                 if (calendarGetRequest(host, request)) {
-                    DPL("******* SUCCESS*******");
+                    CPL("******* SUCCESS: Calendar Update done *******");
                 } else {
-                    DPL("******* ERROR*******");
+                    CPL("******* ERROR: Calendar Update error*******");
                 }
 
-                DPL("Wait Calendar DONE");
+                CPL("Wait Calendar DONE");
                 if (WaitForCalendarStatus() == CALENDAR_STATUS_DONE) {
                     break;
                 }
 
             }
 
-            DPL("***************************   Requests done ********************");
+            CPL("***************************   Requests done ********************");
 
             global_status = CAL_PAINT_DONE;
 
@@ -310,77 +297,28 @@ void loop() {
 
         case ESP_START_SLEEP:
 
-            DPL("*** PREPARE DEEP SLEEP ***");
+            CalculateSleepUntil(WAKE_UP_HOUR, WAKE_UP_MIN);
 
-            // Calculate needed sleep time
-
-            uint16_t sleep_min;
-            /*uint16_t overrun_hour=0;
-
-            // Calculate next wakeup time
-            if (WAKE_UP_MIN - global_time.tm_min >= 0) {
-
-            } else {
-                sleep_min = global_time.tm_min - WAKE_UP_MIN;
-            }
-*/
-            sleep_min = (WAKE_UP_MIN - global_time.tm_min);
-
-            DP("Current Time(MM):");DPL(global_time.tm_min);
-            DP("Wakeup-Min:");DPL(WAKE_UP_MIN);
-            DP("Min to sleep:");DPL(sleep_min);
-
-
-            uint8_t sleep_hour;
-            // Calculate next wakeup time
-            if (WAKE_UP_HOUR - global_time.tm_hour >= 0) {
-                sleep_hour = WAKE_UP_HOUR - global_time.tm_hour;
-            } else {
-                sleep_hour = global_time.tm_hour - WAKE_UP_HOUR+24;
-            }
-
-            DP("Current Time(HH):");DPL(global_time.tm_hour);
-            DP("Wakeup-Hour:");DPL(WAKE_UP_HOUR);
-            DP("Hours to sleep: ");DPL(sleep_hour);
-
-
-
-
-            sleep_min = sleep_min + 60 * sleep_hour;
-            DP("Total Min to sleep:");DPL(sleep_min);
-
-            uint16_t my_sleep_max_min;
-
-            my_sleep_max_min= ESP.deepSleepMax()/60000000;
-            DP("ESP Max-Sleeptime in minutes:");DPL(my_sleep_max_min);
-
-
-            RTC_WakeUpRead();
-            rtcWakeUp.wakeup_count = (sleep_min / my_sleep_max_min);
-            rtcWakeUp.remaining_sleep_min = sleep_min % my_sleep_max_min;
-            RTC_WakeUpWrite();
-
-            DP("Max-Cycles to sleep:");DPL(rtcWakeUp.wakeup_count); //count==1, take the minutes
-            DP("Minutes to sleep:");DPL(rtcWakeUp.remaining_sleep_min);
+            CPL("*** PREPARE DEEP SLEEP ***");
 
             if (rtcWakeUp.wakeup_count == 0) {
-                DP("DeepSleep for min:");DPL(rtcWakeUp.remaining_sleep_min);
-                DPL("** GOOD NIGHT!**");delay(500);
-                ESP.deepSleep(rtcWakeUp.remaining_sleep_min * 60000);
+                CP("DeepSleep for min:");CPL(rtcWakeUp.remaining_sleep_min);
+                CPL("** GOOD NIGHT!**");delay(500);
+                ESP.deepSleep((rtcWakeUp.remaining_sleep_min * 60000000)/10);
             } else {
-                DPL("** GOOD NIGHT!**");delay(500);
-                ESP.deepSleep(ESP.deepSleepMax());
+                CPL("** GOOD NIGHT!**");delay(500);
+                ESP.deepSleep(ESP.deepSleepMax()/10);
             }
+            // here we will not arrive :-)
 
-//            ESP.deepSleep(20000000);
+#ifdef MYDEBUG
 
-
-            DPL("*** Press key to continue, 'x' to reset authentication");
+            CPL("*** Press key to continue, 'x' to reset authentication");
             while (true) {
                 yield();
                 int c = SerialKeyWait();
-                Serial.print("Typed:");
-                Serial.println(c);
+                CP("Typed:");
+                CPL(c);
                 if (c == 120) {
                     global_status = WIFI_INITIAL_STATE;
                 } else {
@@ -389,6 +327,7 @@ void loop() {
                 break;
 
             }
+#endif
             break;
 
         case ESP_SEND_ERROR_MSG:
@@ -401,7 +340,7 @@ void loop() {
             strcpy(my_error_msg, str_time);
             strcat(my_error_msg, error_msg);
 
-            DP("ERROR MESSAGE to Calender:");DPL(my_error_msg);
+            CP("ERROR MESSAGE to Calender:");CPL(my_error_msg);
 
             swSer.write(0x2d);
             swSer.write(0x5a);
@@ -415,7 +354,7 @@ void loop() {
             break;
 
         default:
-            Serial.println("ERROR");
+            CPL("ERROR");
             break;
     }
 
