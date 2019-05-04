@@ -44,12 +44,11 @@ void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min) {
         sleep_min = sleep_min + 24 * 60;
     }
 
-    DP("Total Min to sleep:");
-    DPL(sleep_min);
+    CP("Total Min to sleep:");CPL(sleep_min);
 
     uint16_t my_sleep_max_min;
 
-    my_sleep_max_min = ESP.deepSleepMax() / 60000000;
+    my_sleep_max_min = ESP.deepSleepMax() / US2MIN;
     DP("ESP Max-Sleeptime per cycle in minutes:");
     DPL(my_sleep_max_min);
 
@@ -58,10 +57,8 @@ void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min) {
     rtcWakeUp.remaining_sleep_min = sleep_min % my_sleep_max_min;
     RTC_WakeUpWrite();
 
-    DP("Max-Cycles to sleep:");
-    DPL(rtcWakeUp.wakeup_count); //count==1, take the minutes
-    DP("Minutes to sleep:");
-    DPL(rtcWakeUp.remaining_sleep_min);
+    CP("Max-Cycles to sleep:"); CPL(rtcWakeUp.wakeup_count); //count==1, take the minutes
+    CP("Minutes to sleep:"); CPL(rtcWakeUp.remaining_sleep_min);
 
 
 }

@@ -1,5 +1,9 @@
-#define WAKE_UP_HOUR 11
-#define WAKE_UP_MIN 27
+
+/*** How long to sleep **/
+#define WAKE_UP_HOUR 15
+#define WAKE_UP_MIN 20
+#define CYCLE_SLEEP_HOURS 12 //wake up every 4 hours (consider warp factor)
+#define WARP_FACTOR 6 //testing faster wakeup, normal cycle is 3 1/2 hour
 
 #include <ESP8266WiFi.h>
 //#include <WiFiClientSecureBearSSL.h>
@@ -49,6 +53,7 @@ uint8_t global_status;
 bool b_reset_authorization = false;
 
 
+
 #define PIN_POWER_CAL 15 // D15
 
 
@@ -74,8 +79,11 @@ void setup() {
 
 // #define WAIT_SERIAL
 
-#ifdef WAIT_SERIAL
+#if defined(MYDEBUG) || defined(MYDEBUG_CORE)
     Serial.begin(115200);
+#endif
+
+#ifdef WAIT_SERIAL
     int c;
     DPL("max deep sleep: " + uint64ToString(ESP.deepSleepMax()));
     DPL("Key to start, 'x' to reset authentication");
@@ -101,30 +109,30 @@ void loop() {
     switch (global_status) {
 
         case WAKE_UP_FROM_SLEEP:
-
+            CPL("** GOOD MORNING! **");
             if (RTC_WakeUpRead()) {
 
                 if (rtcWakeUp.wakeup_count > 1) {
-                    CP("DeepSleep for Max-Time with count:");CPL(rtcWakeUp.wakeup_count);
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
-                    ESP.deepSleep(ESP.deepSleepMax()/10);
+                    CP("DeepSleep again for Cycles:");CPL(rtcWakeUp.wakeup_count);
+                    ESP.deepSleep(ESP.deepSleepMax()/WARP_FACTOR);
                 }
 
                 if (rtcWakeUp.wakeup_count == 1) {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
-                    CP("DeepSleep for min:");CPL(rtcWakeUp.remaining_sleep_min);
-                    ESP.deepSleep((rtcWakeUp.remaining_sleep_min * 60000000)/10);
+                    CP("DeepSleep again for min:");CPL(rtcWakeUp.remaining_sleep_min);
+                    ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR);
                 }
 
                 if (rtcWakeUp.wakeup_count == 0) {
                     global_status = CAL_WAIT_READY;
-                    CPL("DeepSleep: DONE - Start Calendar Flow");
+                    CPL("DeepSleep DONE - Start Calendar Flow");
                 }
             } else {
                 global_status = CAL_WAIT_READY;
-                CPL("DeepSleep: No Valid RTC found - Start Calendar Flow");
+                CPL("DeepSleep *** No Valid RTC found - Start Calendar Flow **");
             }
 
 
@@ -297,17 +305,23 @@ void loop() {
 
         case ESP_START_SLEEP:
 
-            CalculateSleepUntil(WAKE_UP_HOUR, WAKE_UP_MIN);
+            CP("*** PREPARE DEEP SLEEP with Warp-Factor: ");CP(WARP_FACTOR);CPL("***");
 
-            CPL("*** PREPARE DEEP SLEEP ***");
+    #ifdef CYCLE_SLEEP_HOURS
+            CalculateSleepUntil(global_time.tm_hour+CYCLE_SLEEP_HOURS, global_time.tm_min);
+    #else
+            CalculateSleepUntil(WAKE_UP_HOUR, WAKE_UP_MIN);
+    #endif
+
 
             if (rtcWakeUp.wakeup_count == 0) {
-                CP("DeepSleep for min:");CPL(rtcWakeUp.remaining_sleep_min);
-                CPL("** GOOD NIGHT!**");delay(500);
-                ESP.deepSleep((rtcWakeUp.remaining_sleep_min * 60000000)/10);
+                CP("*** GOOD-NIGHT - Send to DeepSleep for min: ");CPL(rtcWakeUp.remaining_sleep_min);
+                delay(500);
+                ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR);
             } else {
-                CPL("** GOOD NIGHT!**");delay(500);
-                ESP.deepSleep(ESP.deepSleepMax()/10);
+                CP("*** GOOD-NIGHT - Send to DeepSleep for cycles: ");CPL(rtcWakeUp.wakeup_count);
+                delay(500);
+                ESP.deepSleep(ESP.deepSleepMax()/WARP_FACTOR);
             }
             // here we will not arrive :-)
 

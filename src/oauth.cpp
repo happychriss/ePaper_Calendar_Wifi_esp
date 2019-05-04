@@ -29,8 +29,7 @@ const int httpsPort = 443;
 
 
 bool SetupMyWifi(const char *ssid, const char *password) {
-    CPL();
-    CP("connecting to ");
+    CP("Connecting to: ");
     CPL(ssid);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -51,7 +50,7 @@ bool SetupMyWifi(const char *ssid, const char *password) {
     }
 
     CPL("");
-    CP("WiFi connected with IP address:");DPL(WiFi.localIP());
+    CP("WiFi connected with IP address:");CPL(WiFi.localIP());
     return false;
 }
 
@@ -75,7 +74,7 @@ void SetupTimeSNTP(tm *timeinfo) {
     timeinfo->tm_hour=timeinfo->tm_hour+TIME_ZONE;
     mktime(timeinfo);
 
-    CPL();DPL("*** Current time: ");
+    CP("*** Current time: ");
     CPL(asctime(timeinfo));
 
 
