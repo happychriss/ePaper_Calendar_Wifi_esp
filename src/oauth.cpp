@@ -388,7 +388,7 @@ uint8_t poll_authorization_server() {
     uint8_t my_status = WIFI_AWAIT_CHALLENGE;
     uint8_t try_count = 0;
 
-    #define MAX_TRY_COUNT 30
+    #define MAX_TRY_COUNT 3
 
     do {
 
@@ -426,7 +426,7 @@ uint8_t poll_authorization_server() {
             const char *error_description = root["error_description"];
             DPL(error_description);
             try_count++;
-            delay(1000);
+            delay(5000);
 
         }
 

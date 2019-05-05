@@ -10,6 +10,20 @@
 
 // Calculate needed sleep time
 
+void LED_Blink(uint8_t no) {
+    while (no!=0) {
+        no--;
+        digitalWrite(PIN_LED, HIGH);
+        delay(200);
+        digitalWrite(PIN_LED, LOW);
+        delay(200);
+    }
+    digitalWrite(PIN_LED, HIGH);
+    delay(700);
+    digitalWrite(PIN_LED, LOW);
+}
+
+
 void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min) {
 
     int sleep_hour;

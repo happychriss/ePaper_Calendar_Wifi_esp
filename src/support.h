@@ -15,6 +15,8 @@ bool RTC_OAuthRead();
 void RTC_WakeUpWrite();
 bool RTC_WakeUpRead();
 
+void LED_Blink(uint8_t no);
+
 extern uint8_t global_status ;
 
 extern struct rtcDataOauthStruct rtcOAuth;

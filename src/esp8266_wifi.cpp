@@ -2,8 +2,8 @@
 /*** How long to sleep **/
 #define WAKE_UP_HOUR 15
 #define WAKE_UP_MIN 20
-#define CYCLE_SLEEP_HOURS 12 //wake up every 4 hours (consider warp factor)
-#define WARP_FACTOR 6 //testing faster wakeup, normal cycle is 3 1/2 hour
+#define CYCLE_SLEEP_HOURS 4 //wake up every 4 hours (consider warp factor)
+#define WARP_FACTOR 3 //testing faster wakeup, normal cycle is 3 1/2 hour
 
 #include <ESP8266WiFi.h>
 //#include <WiFiClientSecureBearSSL.h>
@@ -54,7 +54,7 @@ bool b_reset_authorization = false;
 
 
 
-#define PIN_POWER_CAL 15 // D15
+
 
 
 // Commands to Calendar
@@ -73,19 +73,21 @@ bool b_reset_authorization = false;
 void setup() {
 
     pinMode(PIN_POWER_CAL, OUTPUT);
+    pinMode(PIN_LED,OUTPUT);
     digitalWrite(PIN_POWER_CAL, LOW);
     swSer.begin(9600);
     EEPROM.begin(250);
+    BLINK(1);
 
-// #define WAIT_SERIAL
+//    #define WAIT_SERIAL
 
 #if defined(MYDEBUG) || defined(MYDEBUG_CORE)
-    Serial.begin(115200);
+    Serial.begin(19200);
+    delay(200);
 #endif
 
 #ifdef WAIT_SERIAL
     int c;
-    DPL("max deep sleep: " + uint64ToString(ESP.deepSleepMax()));
     DPL("Key to start, 'x' to reset authentication");
     c = SerialKeyWait();
     DP("Typed:");
@@ -95,6 +97,7 @@ void setup() {
     }
 #endif
     global_status = WAKE_UP_FROM_SLEEP;
+//      global_status = CAL_WIFI_GET_CONFIG_QUICK; //test config
 }
 
 
@@ -148,6 +151,12 @@ void loop() {
             global_status = CAL_WIFI_GET_CONFIG;
             break;
 
+        case CAL_WIFI_GET_CONFIG_QUICK:
+            strcpy(my_ssid,"xxx\0");
+            strcpy(my_pwd,"xxx\0");
+            global_status = WIFI_INIT;
+            BLINK(2);
+            break;
 
         case CAL_WIFI_GET_CONFIG:
 
@@ -162,7 +171,7 @@ void loop() {
             CPL(my_pwd);
 
             global_status = WIFI_INIT;
-
+            BLINK(2);
             break;
 
         case WIFI_INIT:
@@ -176,6 +185,7 @@ void loop() {
 
             SetupTimeSNTP(&global_time);
 
+            BLINK(3);
 
             if (RTC_OAuthRead()) {
                 CPL("** OAUTH RTC Status");
@@ -209,7 +219,6 @@ void loop() {
 
             char *my_user_code;
             my_user_code= strdup(user_code);
-
             swSer.write(0x2d);
             swSer.write(0x5a);
             swSer.write(CMD_SHOW_USERCODE_CALENDAR);
@@ -268,6 +277,7 @@ void loop() {
             WriteToCalendar(str_time);
 
             while (true) {
+                BLINK(0);
                 CPL("Wait Calendar Ready");
                 while (WaitForCalendarStatus() != CALENDAR_READY) {}
                 request = ReadSWSer();
@@ -289,6 +299,7 @@ void loop() {
             }
 
             CPL("***************************   Requests done ********************");
+
 
             global_status = CAL_PAINT_DONE;
 
