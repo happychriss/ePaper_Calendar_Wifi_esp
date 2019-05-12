@@ -5,7 +5,7 @@
 #include <Esp.h>
 #include "support.h"
 #include "oauth.h"
-#include "helper.h"
+#include "main_esp8266_wifi.h"
 #include "EEPROM.h"
 
 // Calculate needed sleep time
@@ -19,7 +19,7 @@ void LED_Blink(uint8_t no) {
         delay(200);
     }
     digitalWrite(PIN_LED, HIGH);
-    delay(700);
+    delay(800);
     digitalWrite(PIN_LED, LOW);
 }
 
@@ -62,13 +62,18 @@ void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min) {
 
     uint16_t my_sleep_max_min;
 
-    my_sleep_max_min = ESP.deepSleepMax() / US2MIN;
+    my_sleep_max_min = MAX_SLEEP_US / US2MIN;
     DP("ESP Max-Sleeptime per cycle in minutes:");
     DPL(my_sleep_max_min);
 
     RTC_WakeUpRead();
     rtcWakeUp.wakeup_count = (sleep_min / my_sleep_max_min);
+
     rtcWakeUp.remaining_sleep_min = sleep_min % my_sleep_max_min;
+    if ( rtcWakeUp.remaining_sleep_min==0) {
+        rtcWakeUp.remaining_sleep_min=1;
+    }
+
     RTC_WakeUpWrite();
 
     CP("Max-Cycles to sleep:"); CPL(rtcWakeUp.wakeup_count); //count==1, take the minutes

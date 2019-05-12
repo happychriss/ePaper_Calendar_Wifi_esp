@@ -6,7 +6,7 @@
 #define ESP8266_WIFI_SUPPORT_H
 
 #include <time.h>
-#include <helper.h>
+#include <main_esp8266_wifi.h>
 #include <stdint.h>
 void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min);
 void RTC_OAuthWrite();

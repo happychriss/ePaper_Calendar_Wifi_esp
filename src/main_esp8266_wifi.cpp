@@ -1,23 +1,18 @@
 
-/*** How long to sleep **/
-#define WAKE_UP_HOUR 15
-#define WAKE_UP_MIN 20
-#define CYCLE_SLEEP_HOURS 4 //wake up every 4 hours (consider warp factor)
-#define WARP_FACTOR 3 //testing faster wakeup, normal cycle is 3 1/2 hour
 
 #include <ESP8266WiFi.h>
 //#include <WiFiClientSecureBearSSL.h>
 #include <WiFiClientSecureAxTLS.h> // force use of AxTLS (BearSSL is now default)
 #include "string"
 #include "oauth.h"
-#include "helper.h"
+#include "main_esp8266_wifi.h"
 #include "time.h"
 #include <SoftwareSerial.h>
 #include "EEPROM.h"
 #include "cal_comm.h"
 #include <support.h>
 
-
+// to get serial working: disconnect serial, press reset and shortly afterwards connect serial
 
 //receivePin, transmitPin,
 SoftwareSerial swSer(12, 13, false, 256); //STM32: Weiß muss an RX, Grun an TX
@@ -77,16 +72,15 @@ void setup() {
     digitalWrite(PIN_POWER_CAL, LOW);
     swSer.begin(9600);
     EEPROM.begin(250);
-    BLINK(1);
-
-//    #define WAIT_SERIAL
+    delay(500);
+    BLINK(0);
 
 #if defined(MYDEBUG) || defined(MYDEBUG_CORE)
     Serial.begin(19200);
     delay(200);
 #endif
 
-#ifdef WAIT_SERIAL
+#if defined(WAIT_SERIAL) && (defined(MYDEBUG) || defined(MYDEBUG_CORE))
     int c;
     DPL("Key to start, 'x' to reset authentication");
     c = SerialKeyWait();
@@ -119,14 +113,16 @@ void loop() {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
                     CP("DeepSleep again for Cycles:");CPL(rtcWakeUp.wakeup_count);
-                    ESP.deepSleep(ESP.deepSleepMax()/WARP_FACTOR);
+                    ESP.deepSleep(MAX_SLEEP_US/WARP_FACTOR,RF_NO_CAL);
+                    delay(1500);
                 }
 
                 if (rtcWakeUp.wakeup_count == 1) {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
                     CP("DeepSleep again for min:");CPL(rtcWakeUp.remaining_sleep_min);
-                    ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR);
+                    ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR,RF_CAL);
+                    delay(1500);
                 }
 
                 if (rtcWakeUp.wakeup_count == 0) {
@@ -328,11 +324,13 @@ void loop() {
             if (rtcWakeUp.wakeup_count == 0) {
                 CP("*** GOOD-NIGHT - Send to DeepSleep for min: ");CPL(rtcWakeUp.remaining_sleep_min);
                 delay(500);
-                ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR);
+                ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR,RF_CAL);
+                delay(1500);
             } else {
                 CP("*** GOOD-NIGHT - Send to DeepSleep for cycles: ");CPL(rtcWakeUp.wakeup_count);
                 delay(500);
-                ESP.deepSleep(ESP.deepSleepMax()/WARP_FACTOR);
+                ESP.deepSleep(MAX_SLEEP_US/WARP_FACTOR,RF_NO_CAL);
+                delay(1500);
             }
             // here we will not arrive :-)
 

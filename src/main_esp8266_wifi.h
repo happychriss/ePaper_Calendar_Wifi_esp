@@ -2,17 +2,28 @@
 // Created by development on 05.01.19.
 //
 
-#ifndef ESP8266_WIFI_HELPER_H
-#define ESP8266_WIFI_HELPER_H
+#ifndef ESP8266_WIFI_MAIN_ESP8266_WIFI_H
+#define ESP8266_WIFI_MAIN_ESP8266_WIFI_H
+
+/*** How long to sleep **/
+#define WAKE_UP_HOUR 14
+#define WAKE_UP_MIN 10
+#define CYCLE_SLEEP_HOURS 3 //wake up every x hours (divided by warp-factor)
+#define WARP_FACTOR 1 //testing faster wakeup
+
+#define US2MIN 60000000
+#define MAX_SLEEP_US (70*US2MIN) // minuntes as max-sleep (*US2MIN = 60000000)
 
 
-#define PIN_POWER_CAL 4 // D15
-#define PIN_LED 5 //
+/**** Debug options *******/
+//#define MYDEBUG
+//#define MYDEBUG_CORE
+//#define WAIT_SERIAL
+#define SHOW_BLINK
 
 #define TIME_ZONE -6
-#define US2MIN 60000000
-
-#define SHOW_BLINK
+#define PIN_POWER_CAL 4 // D15
+#define PIN_LED 5 //
 
 
 #ifdef SHOW_BLINK
@@ -21,7 +32,6 @@
 #define BLINK(x)
 #endif
 
-//#define MYDEBUG
 
 #ifdef MYDEBUG
 #define MYDEBUG_CORE
@@ -34,8 +44,6 @@
 #define DPL(x)
 #endif
 
-
-//#define MYDEBUG_CORE
 
 #ifdef MYDEBUG_CORE
 #define CP(x)     Serial.print (x)
@@ -81,4 +89,4 @@ static const int CAL_WIFI_GET_CONFIG_QUICK = 12;
 
 
 
-#endif //ESP8266_WIFI_HELPER_H
+#endif //ESP8266_WIFI_MAIN_ESP8266_WIFI_H

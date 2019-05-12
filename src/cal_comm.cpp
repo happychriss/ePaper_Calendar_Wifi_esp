@@ -5,7 +5,7 @@
 #include <ESP8266WiFi.h>
 #include "string"
 #include "oauth.h"
-#include "helper.h"
+#include "main_esp8266_wifi.h"
 #include <SoftwareSerial.h>
 #include "cal_comm.h"
 
