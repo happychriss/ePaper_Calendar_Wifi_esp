@@ -6,14 +6,13 @@
 #define ESP8266_WIFI_MAIN_ESP8266_WIFI_H
 
 /*** How long to sleep **/
-#define WAKE_UP_HOUR 14
-#define WAKE_UP_MIN 10
-#define CYCLE_SLEEP_HOURS 3 //wake up every x hours (divided by warp-factor)
+#define WAKE_UP_HOUR 2
+#define WAKE_UP_MIN 12
+// #define CYCLE_SLEEP_HOURS 3 //wake up every x hours (divided by warp-factor)
 #define WARP_FACTOR 1 //testing faster wakeup
 
 #define US2MIN 60000000
-#define MAX_SLEEP_US (70*US2MIN) // minuntes as max-sleep (*US2MIN = 60000000)
-
+#define MAX_SLEEP_MIN 70 // minuntes as max-sleep (*US2MIN = 60000000)
 
 /**** Debug options *******/
 //#define MYDEBUG

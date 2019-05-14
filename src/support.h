@@ -17,6 +17,8 @@ bool RTC_WakeUpRead();
 
 void LED_Blink(uint8_t no);
 
+void MyDeepSleep(uint16_t min, RFMode mode);
+
 extern uint8_t global_status ;
 
 extern struct rtcDataOauthStruct rtcOAuth;

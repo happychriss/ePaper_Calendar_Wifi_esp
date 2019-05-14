@@ -70,6 +70,8 @@ void setup() {
     pinMode(PIN_POWER_CAL, OUTPUT);
     pinMode(PIN_LED,OUTPUT);
     digitalWrite(PIN_POWER_CAL, LOW);
+    delay(500);
+    BLINK(0);
     swSer.begin(9600);
     EEPROM.begin(250);
     delay(500);
@@ -113,7 +115,7 @@ void loop() {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
                     CP("DeepSleep again for Cycles:");CPL(rtcWakeUp.wakeup_count);
-                    ESP.deepSleep(MAX_SLEEP_US/WARP_FACTOR,RF_NO_CAL);
+                    MyDeepSleep(MAX_SLEEP_MIN,RF_NO_CAL);
                     delay(1500);
                 }
 
@@ -121,7 +123,7 @@ void loop() {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
                     CP("DeepSleep again for min:");CPL(rtcWakeUp.remaining_sleep_min);
-                    ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR,RF_CAL);
+                    MyDeepSleep(rtcWakeUp.remaining_sleep_min,RF_CAL);
                     delay(1500);
                 }
 
@@ -324,12 +326,12 @@ void loop() {
             if (rtcWakeUp.wakeup_count == 0) {
                 CP("*** GOOD-NIGHT - Send to DeepSleep for min: ");CPL(rtcWakeUp.remaining_sleep_min);
                 delay(500);
-                ESP.deepSleep((rtcWakeUp.remaining_sleep_min * US2MIN)/WARP_FACTOR,RF_CAL);
+                MyDeepSleep(rtcWakeUp.remaining_sleep_min,RF_CAL);
                 delay(1500);
             } else {
                 CP("*** GOOD-NIGHT - Send to DeepSleep for cycles: ");CPL(rtcWakeUp.wakeup_count);
                 delay(500);
-                ESP.deepSleep(MAX_SLEEP_US/WARP_FACTOR,RF_NO_CAL);
+                MyDeepSleep(MAX_SLEEP_MIN,RF_NO_CAL);
                 delay(1500);
             }
             // here we will not arrive :-)

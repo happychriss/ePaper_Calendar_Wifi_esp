@@ -24,6 +24,17 @@ void LED_Blink(uint8_t no) {
 }
 
 
+void MyDeepSleep(uint16_t min, RFMode mode) {
+    uint64_t us2min = US2MIN;
+
+    DP("MyDeepSleep: ");DPL(min/WARP_FACTOR);
+
+    uint64_t sleep_us=min * us2min;
+    sleep_us=sleep_us/WARP_FACTOR;
+    ESP.deepSleep(sleep_us,mode);
+}
+
+
 void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min) {
 
     int sleep_hour;
@@ -62,7 +73,7 @@ void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min) {
 
     uint16_t my_sleep_max_min;
 
-    my_sleep_max_min = MAX_SLEEP_US / US2MIN;
+    my_sleep_max_min = MAX_SLEEP_MIN;
     DP("ESP Max-Sleeptime per cycle in minutes:");
     DPL(my_sleep_max_min);
 
