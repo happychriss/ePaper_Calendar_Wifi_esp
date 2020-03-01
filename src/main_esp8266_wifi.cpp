@@ -92,8 +92,8 @@ void setup() {
         b_reset_authorization = true;
     }
 #endif
-//    global_status = WAKE_UP_FROM_SLEEP; // normal operations
-      global_status = CAL_WAIT_READY; // debugging
+   global_status = WAKE_UP_FROM_SLEEP; // normal operations
+//      global_status = CAL_WAIT_READY; // debugging
 }
 
 

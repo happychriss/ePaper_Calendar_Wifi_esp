@@ -19,7 +19,7 @@ void LED_Blink(uint8_t no) {
         delay(200);
     }
     digitalWrite(PIN_LED, HIGH);
-    delay(800);
+    delay(400);
     digitalWrite(PIN_LED, LOW);
 }
 

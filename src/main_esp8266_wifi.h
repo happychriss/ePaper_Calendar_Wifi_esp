@@ -17,7 +17,7 @@
 /**** Debug options *******/
 //#define MYDEBUG
 //#define MYDEBUG_CORE
-// #define WAIT_SERIAL
+//#define WAIT_SERIAL
 #define SHOW_BLINK
 
 #define TIME_ZONE -6
