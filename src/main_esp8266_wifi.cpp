@@ -18,7 +18,7 @@
 SoftwareSerial swSer(12, 13, false, 256); //STM32: Weiß muss an RX, Grun an TX
 
 
-const char *host = "www.googleapis.com";
+const char *host = "www.googleapis.com\0";
 
 char my_ssid[50] = {0};
 char my_pwd[50] = {0};
@@ -78,7 +78,7 @@ void setup() {
     BLINK(0);
 
 #if defined(MYDEBUG) || defined(MYDEBUG_CORE)
-    Serial.begin(19200);
+    Serial.begin(9600);
     delay(200);
 #endif
 
@@ -92,14 +92,14 @@ void setup() {
         b_reset_authorization = true;
     }
 #endif
-    global_status = WAKE_UP_FROM_SLEEP;
-//      global_status = CAL_WIFI_GET_CONFIG_QUICK; //test config
+//    global_status = WAKE_UP_FROM_SLEEP; // normal operations
+      global_status = CAL_WAIT_READY; // debugging
 }
 
 
 void loop() {
 
-
+//    ESP.deepSleep(0);
 
     CP("************** State:");CPD(global_status);CPL(" ****************");
 
@@ -279,9 +279,6 @@ void loop() {
                 CPL("Wait Calendar Ready");
                 while (WaitForCalendarStatus() != CALENDAR_READY) {}
                 request = ReadSWSer();
-
-                DP("***************************   Request received: ");
-                DPL(request);
 
                 if (calendarGetRequest(host, request)) {
                     CPL("******* SUCCESS: Calendar Update done *******");

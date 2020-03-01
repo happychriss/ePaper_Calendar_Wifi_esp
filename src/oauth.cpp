@@ -336,8 +336,10 @@ uint8_t request_access_token() {
 
     String json = postRequest(host, postHeader, postData);
     const size_t bufferSize = JSON_OBJECT_SIZE(5) + 230;
-    DynamicJsonBuffer jsonBuffer(bufferSize);
-    JsonObject &root = jsonBuffer.parseObject(json);
+    DynamicJsonDocument jsonBuffer(bufferSize);
+//    JsonObject &root = jsonBuffer.parseObject(json);
+    deserializeJson(jsonBuffer,json);
+    JsonObject root = jsonBuffer.as<JsonObject>();
 
     if (root.containsKey("access_token")) {
 
@@ -382,7 +384,8 @@ uint8_t poll_authorization_server() {
     postHeader += ("\r\n\r\n");
 
     const size_t bufferSize = JSON_OBJECT_SIZE(5) + 230;
-    DynamicJsonBuffer jsonBuffer(bufferSize);
+    DynamicJsonDocument jsonBuffer(bufferSize);
+
     String json;
 
     uint8_t my_status = WIFI_AWAIT_CHALLENGE;
@@ -396,7 +399,9 @@ uint8_t poll_authorization_server() {
 
         json = postRequest(host, postHeader, postData);
 
-        JsonObject &root = jsonBuffer.parseObject(json);
+        deserializeJson(jsonBuffer,json);
+        JsonObject root = jsonBuffer.as<JsonObject>();
+
 
         if (root.containsKey("access_token")) {
 
@@ -470,8 +475,11 @@ const char *request_user_and_device_code() {
 
     String json = postRequest(host, postHeader, postData);
     const size_t bufferSize = JSON_OBJECT_SIZE(5) + 230;
-    DynamicJsonBuffer jsonBuffer(bufferSize);
-    JsonObject &root = jsonBuffer.parseObject(json);
+
+
+    DynamicJsonDocument jsonBuffer(bufferSize);
+    deserializeJson(jsonBuffer,json);
+    JsonObject root = jsonBuffer.as<JsonObject>();
 
     const char *user_code = root["user_code"];
     const char *device_code = root["device_code"];
