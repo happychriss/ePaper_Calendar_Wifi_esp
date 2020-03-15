@@ -5,7 +5,12 @@
 
 #include <WString.h>
 #include "HardwareSerial.cpp"
+
+#define USING_AXTLS
 #include <ESP8266WiFi.h>
+#include <WiFiClientSecureAxTLS.h>
+using namespace axTLS;
+
 #include "cacert.h"
 #include <time.h>
 #include "ArduinoJson.h"
@@ -15,17 +20,15 @@
 // #include <CertStoreBearSSL.h>
 
 // OAUTH2 Client credentials
-const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
-const String scope = "https://www.googleapis.com/auth/calendar.readonly";
+static const  String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
+static const  String scope = "https://www.googleapis.com/auth/calendar.readonly";
 //const String scope = "https://www.googleapis.com/auth/calendar";
-const String auth_uri = "https://accounts.google.com/o/oauth2/auth";
-const String code_uri = "https://accounts.google.com/o/oauth2/device/code";
-const String info_uri = "/oauth2/v3/tokeninfo";
-const String token_uri = "/oauth2/v4/token";
-
-
-
-const int httpsPort = 443;
+static const  String auth_uri = "https://accounts.google.com/o/oauth2/auth";
+static const  String code_uri = "https://accounts.google.com/o/oauth2/device/code";
+static const String info_uri = "/oauth2/v3/tokeninfo";
+static const String token_uri = "/oauth2/v4/token";
+static const char *host = "www.googleapis.com";
+const static int httpsPort = 443;
 
 
 bool SetupMyWifi(const char *ssid, const char *password) {
@@ -34,16 +37,16 @@ bool SetupMyWifi(const char *ssid, const char *password) {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 
-    uint16_t try_count=500;
+    uint16_t try_count = 500;
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         DP(".");
         try_count--;
-        if (try_count==0) break;
+        if (try_count == 0) break;
     }
 
-    if (try_count==0) {
+    if (try_count == 0) {
         CPL("");
         CPL("WIFI Connection ERROR");
         return true;
@@ -71,7 +74,7 @@ void SetupTimeSNTP(tm *timeinfo) {
     DPL("");
 
     gmtime_r(&now, timeinfo);
-    timeinfo->tm_hour=timeinfo->tm_hour+TIME_ZONE;
+    timeinfo->tm_hour = timeinfo->tm_hour + TIME_ZONE;
     mktime(timeinfo);
 
     CP("*** Current time: ");
@@ -111,53 +114,56 @@ void SetCertificates(WiFiClientSecure client) {
 }
 
 
-bool calendarGetRequest(const char *server, String request) {
-
-
-    DP("calendarGetRequest:");
-    DPL(request);
+bool calendarGetRequest(char *request) {
 
     bool result = false;
 
-    String reqHeader = "";
-    reqHeader += ("GET " + request + "access_token=" + global_access_token + " HTTP/1.1\r\n");
-    reqHeader += ("Host: " + String(host) + ":" + String(httpsPort) + "\r\n");
-    reqHeader += ("Connection: close\r\n");
-    reqHeader += ("\r\n\r\n");
+    CP("calenderGetRequest, heap is: "); CPL(ESP.getFreeHeap());
 
-    // Use WiFiClientSecure class to create TLS connection
+
+    ssize_t bufsz = snprintf(NULL, 0,
+                             "GET %saccess_token=%s HTTP/1.1\r\nHost: www.googleapis.com:443\r\nConnection: close\r\n\r\n\r\n",
+                             request, global_access_token);
+
+    char *full_request = (char *) malloc(bufsz + 1);
+    DP("Full Request Size:");DPL(bufsz);
+
+    sprintf(full_request,
+            "GET %saccess_token=%s HTTP/1.1\r\nHost: www.googleapis.com:443\r\nConnection: close\r\n\r\n\r\n",
+            request, global_access_token);
+
+    DPL(full_request);
+
+
     WiFiClientSecure client;
-    DP("Connecting to: ");
-    DPL(server);
+    // Use WiFiClientSecure class to create TLS connection
 
-    if (!client.connect(server, httpsPort)) {
+    if (!client.connect(host, httpsPort)) {
         DPL("connection failed");
         return result;
     }
 
+    CP("Check Certificate, heap is: ");CPL(ESP.getFreeHeap());
     SetCertificates(client);
-
-    if (client.verifyCertChain(server)) {
-
+    if (client.verifyCertChain(host)) {
         DPL("certificate matches");
-        DP("get: ");
-        DPL(reqHeader);
-        client.print(reqHeader);
-        DPL("request sent");
-        DPL("Receiving response");
+        client.print(full_request);
+        DP("request sent, checking response with heap:");CPL(ESP.getFreeHeap());
 
-        if (client.find("HTTP/1.1 ")) {
-            String status_code = client.readStringUntil('\r');
-            DP("Status code: ");
-            DPL(status_code);
-            if (status_code != "200 OK") {
-                DPL("There was an error");
-                return false;
-            }
+        if (!client.find("HTTP/1.1 ")) return false;
+
+        String status_code = client.readStringUntil('\r');
+        DP("Status code: ");
+        DPL(status_code);
+        if (status_code != "200 OK") {
+            DPL("There was an error");
+            return false;
         }
-        if (client.find("\r\n\r\n")) {
-            DPL("Data:");
-        }
+
+        if (!client.find("\r\n\r\n")) return false;
+
+        DPL("Data:");
+
 
 #define READ_LENGTH 1
 
@@ -178,8 +184,8 @@ bool calendarGetRequest(const char *server, String request) {
 
         result = true;
 
-        DPL("closing connection");
-
+        DPL("closing connection with heap:"); CPL(ESP.getFreeHeap());
+        client.stop();
         return result;
     } else {
         DPL("certificate doesn't match");
@@ -243,6 +249,7 @@ String getRequest(const char *server, String request) {
         }
 
         DPL("closing connection");
+        client.stop();
         return result;
     } else {
         DPL("certificate doesn't match");
@@ -253,6 +260,9 @@ String getRequest(const char *server, String request) {
 
 String postRequest(const char *server, String header, String data) {
 
+    WiFiClientSecure client;
+    delay(100);
+
     DP("Function: ");
     DPL("postRequest()");
 
@@ -260,11 +270,11 @@ String postRequest(const char *server, String header, String data) {
     String result = "";
 
     // Use WiFiClientSecure class to create TLS connection
-    WiFiClientSecure client;
+
     DP("Connecting to: ");
     DPL(server);
 
-    if (int res=!client.connect(server, httpsPort)) {
+    if (int res = !client.connect(server, httpsPort)) {
 
         DPL("connection failed with result");
         DPL(res);
@@ -305,6 +315,7 @@ String postRequest(const char *server, String header, String data) {
         }
 
         DPL("closing connection");
+        client.stop();
         return result;
     } else {
         DPL("certificate doesn't match");
@@ -338,16 +349,16 @@ uint8_t request_access_token() {
     const size_t bufferSize = JSON_OBJECT_SIZE(5) + 230;
     DynamicJsonDocument jsonBuffer(bufferSize);
 //    JsonObject &root = jsonBuffer.parseObject(json);
-    deserializeJson(jsonBuffer,json);
+    deserializeJson(jsonBuffer, json);
     JsonObject root = jsonBuffer.as<JsonObject>();
 
     if (root.containsKey("access_token")) {
 
         DPL("Refreshing Access Token");
-
         const char *local_access_token = root["access_token"];
-        memset(global_access_token, 0, sizeof(global_access_token));
+        global_access_token=(char *) calloc(sizeof(char),strlen(local_access_token)+1);
         memcpy(global_access_token, local_access_token, strlen(local_access_token));
+
 
     } else {
 
@@ -391,7 +402,7 @@ uint8_t poll_authorization_server() {
     uint8_t my_status = WIFI_AWAIT_CHALLENGE;
     uint8_t try_count = 0;
 
-    #define MAX_TRY_COUNT 3
+#define MAX_TRY_COUNT 3
 
     do {
 
@@ -399,7 +410,7 @@ uint8_t poll_authorization_server() {
 
         json = postRequest(host, postHeader, postData);
 
-        deserializeJson(jsonBuffer,json);
+        deserializeJson(jsonBuffer, json);
         JsonObject root = jsonBuffer.as<JsonObject>();
 
 
@@ -407,7 +418,9 @@ uint8_t poll_authorization_server() {
 
             DPL("Getting Token");
 
+            DPL("Refreshing Access Token");
             const char *local_access_token = root["access_token"];
+            global_access_token=(char *) calloc(sizeof(char),strlen(local_access_token)+1);
             memcpy(global_access_token, local_access_token, strlen(local_access_token));
 
             const char *refresh_token = root["refresh_token"];
@@ -445,7 +458,7 @@ uint8_t poll_authorization_server() {
         DPL("Challenge failed - Restart Initialization");
 
         memset(&rtcOAuth, 0, sizeof(rtcOAuth));
-        rtcOAuth.status=my_status;
+        rtcOAuth.status = my_status;
         RTC_OAuthWrite();
     }
 
@@ -478,7 +491,7 @@ const char *request_user_and_device_code() {
 
 
     DynamicJsonDocument jsonBuffer(bufferSize);
-    deserializeJson(jsonBuffer,json);
+    deserializeJson(jsonBuffer, json);
     JsonObject root = jsonBuffer.as<JsonObject>();
 
     const char *user_code = root["user_code"];

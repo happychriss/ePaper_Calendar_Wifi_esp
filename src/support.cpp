@@ -8,6 +8,9 @@
 #include "main_esp8266_wifi.h"
 #include "EEPROM.h"
 
+
+
+
 // Calculate needed sleep time
 
 void LED_Blink(uint8_t no) {
@@ -95,26 +98,29 @@ void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min) {
 
 
 
-String ReadSWSer() {
+void ReadSWSer(char *data) {
 
-    char buffer[200] = {};
-    uint8_t bytes_read = 0;
+    uint16_t bytes_read = 0;
     int c;
 
     while (true) {
 
         c = swSer.read();
-        delay(50);
-        if (((c == 0) || (c == -1))) {
+        delay(20);
+        if ((c == 0) || (c == -1) ) {
             break;
         }
 
-        buffer[bytes_read++] = (char) c;
+        data[bytes_read++] = (char) c;
+
     }
 
-    buffer[bytes_read] = 0;
-    String result((char *) buffer);
-    return result;
+    data[bytes_read]=0;
+
+    DP("Read Buffer Size:");DPL(bytes_read);
+
+    DPL(data);
+
 }
 
 
@@ -260,4 +266,20 @@ int SerialKeyWait() {// Wait for Key
     return Serial.read();
 
 
+}
+
+void ErrorToDisplay (char * my_error_msg) {
+    char str_time[22];
+
+    strftime(str_time, sizeof(str_time), "%Y %m %d %H:%M:%S", &global_time);
+
+    ssize_t bufsz = snprintf(NULL, 0,
+                             "ERROR (%s): %s", str_time, my_error_msg);
+
+    error_msg = (char *) malloc(bufsz + 1);
+    sprintf(error_msg,
+            "ERROR (%s): %s", str_time, my_error_msg);
+
+    CP("ERROR MESSAGE to Calender:");
+    CPL(my_error_msg);
 }

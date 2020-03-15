@@ -6,8 +6,11 @@
 #include "string"
 #include "oauth.h"
 #include "main_esp8266_wifi.h"
-#include <SoftwareSerial.h>
 #include "cal_comm.h"
+#include "main_esp8266_wifi.h"
+
+
+
 
 void ReadFromCalendar(char *data) {
     int count = 0;
@@ -59,7 +62,15 @@ uint8_t WaitForCalendarStatus() {
 
 }
 
+bool WriteCommandToCalendar(uint8 command) {
 
+    delay(500);
+    DP("WriteCommand to calender:");DPL(command);
+    swSer.write(0x2d);
+    swSer.write(0x5a);
+    swSer.write(command);
+    return true;
+ }
 
 // source: https://github.com/markszabo/IRremoteESP8266/blob/master/src/IRutils.cpp#L48
 String uint64ToString(uint64_t input) {

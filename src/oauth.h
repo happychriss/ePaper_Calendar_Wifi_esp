@@ -6,7 +6,7 @@
 #define ESP8266_WIFI_OAUTH_H
 
 
-#include <SoftwareSerial.h>
+#include "softser_old.h"
 
 void RTC_OAuthWrite();
 
@@ -19,10 +19,9 @@ extern uint8_t global_status ;
 extern struct rtcDataOauthStruct rtcOAuth;
 extern struct rtcDataWakeupStruct rtcWakeUp;
 
-extern char global_access_token[150];
+extern char * global_access_token;
 extern SoftwareSerial swSer;
-extern const char *host;
-String ReadSWSer();
+void ReadSWSer(char *data);
 uint8_t request_access_token();
 
 void SetupTimeSNTP(tm *timeinfo);
@@ -31,7 +30,8 @@ int SerialKeyWait();
 
 extern const char * request_user_and_device_code();
 uint8_t poll_authorization_server();
-bool calendarGetRequest(const char *server, String request);
+
+bool calendarGetRequest(char *request);
 bool CheckRTC();
 
 #endif //ESP8266_WIFI_OAUTH_H

@@ -8,6 +8,7 @@
 #include <time.h>
 #include <main_esp8266_wifi.h>
 #include <stdint.h>
+
 void CalculateSleepUntil(uint8_t wake_up_hour, uint8_t wake_up_min);
 void RTC_OAuthWrite();
 
@@ -23,6 +24,7 @@ extern uint8_t global_status ;
 
 extern struct rtcDataOauthStruct rtcOAuth;
 extern struct rtcDataWakeupStruct rtcWakeUp;
-
+extern char * error_msg;
+void ErrorToDisplay (char * my_error_msg);
 extern tm global_time;
 #endif //ESP8266_WIFI_SUPPORT_H

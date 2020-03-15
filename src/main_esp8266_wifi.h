@@ -5,6 +5,24 @@
 #ifndef ESP8266_WIFI_MAIN_ESP8266_WIFI_H
 #define ESP8266_WIFI_MAIN_ESP8266_WIFI_H
 
+
+
+// Commands to Calendar
+#define CMD_READ_CALENDAR 1
+#define CMD_SHUTDOWN_CALENDAR 2
+#define CMD_SHOW_USERCODE_CALENDAR 3
+#define CMD_SHOW_ERROR_MSG 4
+#define CMD_SEND_WIFI 5
+#define CMD_AWAKE_TEST 6
+
+
+// If the calendar wants to get more data
+#define CALENDAR_READY 1
+#define CALENDAR_STATUS_MORE  2
+#define CALENDAR_STATUS_READY  3
+
+
+
 /*** How long to sleep **/
 #define WAKE_UP_HOUR 2
 #define WAKE_UP_MIN 12
@@ -83,7 +101,10 @@ static const int CAL_PAINT_UPDATE = 8;
 static const int CAL_PAINT_DONE = 9;
 static const int ESP_START_SLEEP = 10;
 static const int ESP_SEND_ERROR_MSG = 11;
-static const int CAL_WIFI_GET_CONFIG_QUICK = 12;
+static const int CAL_QUICK_INIT = 12;
+static const int CAL_WAKEUP = 13;
+
+
 
 
 
