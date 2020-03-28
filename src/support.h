@@ -24,7 +24,7 @@ extern uint8_t global_status ;
 
 extern struct rtcDataOauthStruct rtcOAuth;
 extern struct rtcDataWakeupStruct rtcWakeUp;
-extern char * error_msg;
+extern char * global_error_msg;
 void ErrorToDisplay (char * my_error_msg);
 extern tm global_time;
 #endif //ESP8266_WIFI_SUPPORT_H

@@ -42,16 +42,18 @@ void WriteToCalendar(char *data) {
 
 }
 
-uint8_t WaitForCalendarStatus() {
+int WaitForCalendarStatus() {
 
     DPL("Wait Status:");
+    uint16 waiter=0;
 
     int c1, in;
 
-        while (true) {
+        while (waiter<100) {
             in = swSer.available();
             delay(50);
             if (in > 0) break;
+            waiter++;
         }
         c1 = swSer.read();
 

@@ -6,7 +6,7 @@
 #define ESP8266_WIFI_CAL_COMM_H
 void ReadFromCalendar(char *data);
 void WriteToCalendar(char *data);
-uint8_t WaitForCalendarStatus();
+int WaitForCalendarStatus();
 String uint64ToString(uint64_t input);
 bool WriteCommandToCalendar(uint8 command);
 #endif //ESP8266_WIFI_CAL_COMM_H

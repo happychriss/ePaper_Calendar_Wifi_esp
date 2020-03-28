@@ -30,6 +30,7 @@ int SerialKeyWait();
 
 extern const char * request_user_and_device_code();
 uint8_t poll_authorization_server();
+bool CheckCertifcates();
 
 bool calendarGetRequest(char *request);
 bool CheckRTC();

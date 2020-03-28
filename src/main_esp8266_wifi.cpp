@@ -23,9 +23,9 @@ SoftwareSerial swSer(12, 13, false, 256); //STM32: Weiß muss an RX, Grun an TX
 char my_ssid[20] = {0};
 char my_pwd[20] = {0};
 
-char str_time[22];
+char str_global_time[22];
 char *global_access_token;
-char * error_msg;
+char *global_error_msg;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored  "-Wdeprecated-declarations"
@@ -48,10 +48,6 @@ uint8_t global_status;
 bool b_reset_authorization = false;
 
 
-
-
-
-
 void setup() {
 
     pinMode(PIN_POWER_CAL, OUTPUT);
@@ -59,7 +55,7 @@ void setup() {
     digitalWrite(PIN_POWER_CAL, LOW);
     delay(500);
     swSer.begin(19200);
-    EEPROM.begin(250);
+    EEPROM.begin(4096);
     delay(500);
     BLINK(0);
 
@@ -87,7 +83,7 @@ void loop() {
     char ssid[20] = {0};
     char pwd[20] = {0};
 
-   // ESP.deepSleep(0);
+    // ESP.deepSleep(0);
 
     CP("******************* State:");
     CPD(global_status);
@@ -100,36 +96,79 @@ void loop() {
 
         case CAL_QUICK_INIT:
             CPL("** QUICK INIT **");
-            RTC_WakeUpRead();
-            global_status = CAL_WAKEUP;
+
+            memset(rtcOAuth.refresh_token, 0, sizeof(rtcOAuth.refresh_token));
+
+            digitalWrite(PIN_POWER_CAL, HIGH);
+            delay(1000);
+
+            WriteCommandToCalendar(CMD_AWAKE_TEST);
+
+            if (WaitForCalendarStatus() == -1) {
+                ErrorToDisplay("eInk not awake!");
+                global_status = ESP_SEND_ERROR_MSG;
+                break;
+            };
+
+            CPL("Calendar I am awake!");
+
+            SetupMyWifi("Alice-WLANXP", "fabneu7167");
+
+            if (CheckCertifcates()) {
+                global_status = ESP_SEND_ERROR_MSG;
+                break;
+            }
+
+            SetupTimeSNTP(&global_time);
+
+            BLINK(3);
+
+            if (RTC_OAuthRead() && !b_reset_authorization) {
+                CPL("** OAUTH RTC Status");
+                CP("Status: ");
+                CPL(rtcOAuth.status);
+                CP("Device-Code: ");
+                CPL(rtcOAuth.device_code);
+                CP("Refresh-Token: ");
+                CPL(rtcOAuth.refresh_token);
+                global_status = WIFI_CHECK_ACCESS_TOKEN;
+            } else {
+                global_status = WIFI_INITIAL_STATE;
+            }
+
             break;
 
         case WAKE_UP_FROM_SLEEP:
             CPL("** GOOD MORNING! **");
             if (RTC_WakeUpRead()) {
 
-                if (rtcWakeUp.wakeup_count > 1) {
+                if (rtcWakeUp.b_wake_up_after_error) {
+                    global_status = CAL_WAKEUP;
+                    rtcWakeUp.b_wake_up_after_error = false;
+                    RTC_WakeUpWrite();
+                    CPL("DeepSleep DONE - Wakeup after error");
+                    BLINK(5);
+
+                } else if (rtcWakeUp.wakeup_count > 1) {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
                     CP("DeepSleep again for Cycles:");
                     CPL(rtcWakeUp.wakeup_count);
                     MyDeepSleep(MAX_SLEEP_MIN, RF_NO_CAL);
                     delay(1500);
-                }
-
-                if (rtcWakeUp.wakeup_count == 1) {
+                } else if (rtcWakeUp.wakeup_count == 1) {
                     rtcWakeUp.wakeup_count = rtcWakeUp.wakeup_count - 1;
                     RTC_WakeUpWrite();
                     CP("DeepSleep again for min:");
                     CPL(rtcWakeUp.remaining_sleep_min);
                     MyDeepSleep(rtcWakeUp.remaining_sleep_min, RF_CAL);
                     delay(1500);
-                }
-
-                if (rtcWakeUp.wakeup_count == 0) {
+                } else if (rtcWakeUp.wakeup_count == 0) {
                     global_status = CAL_WAKEUP;;
                     CPL("DeepSleep DONE - Start Calendar Flow");
                 }
+
+
             } else {
                 global_status = CAL_WAKEUP;
                 CPL("DeepSleep *** No Valid RTC found - Start Calendar Flow **");
@@ -139,11 +178,20 @@ void loop() {
 
         case CAL_WAKEUP:
             BLINK(2);
-            CPL("Wake up the calendar");
+
+            CPL("Wake up the calendar..");
+
             digitalWrite(PIN_POWER_CAL, HIGH);
             delay(3000);
+
             WriteCommandToCalendar(CMD_AWAKE_TEST);
-            WaitForCalendarStatus();
+
+            if (WaitForCalendarStatus() == -1) {
+                ErrorToDisplay("eInk not awake!");
+                global_status = ESP_SEND_ERROR_MSG;
+                break;
+            };
+
             CPL("Calendar I am awake!");
             BLINK(0);
             delay(5000);
@@ -153,18 +201,27 @@ void loop() {
         case CAL_WIFI_GET_CONFIG:
             CPL("Request Wifi Config from Calendar..");
             WriteCommandToCalendar(CMD_SEND_WIFI);
-            ReadFromCalendar(my_ssid);CP("SSID:");CPL(my_ssid);
-            ReadFromCalendar(my_pwd);CP("PWD: ");CPL(my_pwd);
+            ReadFromCalendar(my_ssid);
+            CP("SSID:");
+            CPL(my_ssid);
+            ReadFromCalendar(my_pwd);
+            CP("PWD: ");
+            CPL(my_pwd);
 
             global_status = WIFI_INIT;
-
 
             break;
 
         case WIFI_INIT:
-
             if (SetupMyWifi(my_ssid, my_pwd)) {
-                error_msg = strdup(" - WIFI Connection ERROR!");
+                char tmp_err[100] = {0};
+                sprintf(tmp_err, "WiFi: %s", my_ssid);
+                ErrorToDisplay(tmp_err);
+                global_status = ESP_SEND_ERROR_MSG;
+                break;
+            }
+
+            if (CheckCertifcates()) {
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
             }
@@ -182,7 +239,9 @@ void loop() {
                 CP("Refresh-Token: ");
                 CPL(rtcOAuth.refresh_token);
 
-                if (b_reset_authorization) {
+                RTC_WakeUpRead();
+
+                if (b_reset_authorization ) {
                     CPL("*Reset Google User access - set initial state*");
                     global_status = WIFI_INITIAL_STATE;
                 } else {
@@ -202,6 +261,12 @@ void loop() {
 
             const char *user_code;
             user_code = request_user_and_device_code();
+
+            if (user_code == 0) {
+                CPL("Error Get UserCode");
+                global_status = ESP_SEND_ERROR_MSG;
+                break;
+            }
 
             char *my_user_code;
             my_user_code = strdup(user_code);
@@ -231,15 +296,17 @@ void loop() {
 
         case CAL_PAINT_UPDATE:
 
+            strftime(str_global_time, sizeof(str_global_time), "%Y %m %d %H:%M:%S", &global_time);
             WriteCommandToCalendar(CMD_READ_CALENDAR);
+            WriteToCalendar(str_global_time);
 
-            strftime(str_time, sizeof(str_time), "%Y %m %d %H:%M:%S", &global_time);
             CP("******* Request Calendar Update with time-stamp:");
-            CPL(str_time);
-            WriteToCalendar(str_time);
+            CPL(str_global_time);
 
             while (true) {
-                BLINK(0);CP("Wait Calendar Ready, heap is ");CPL(ESP.getFreeHeap());
+                BLINK(0);
+                CP("Wait Calendar Ready, heap is ");
+                CPL(ESP.getFreeHeap());
 
                 if (WaitForCalendarStatus() != CALENDAR_STATUS_MORE) break;
 
@@ -255,7 +322,6 @@ void loop() {
 
             if (!b_send_ok) {
                 CPL("******* ERROR: Calendar Update *******");
-                ErrorToDisplay ("Ugggh, problem!!");
                 global_status = ESP_SEND_ERROR_MSG;
             } else {
                 CPL("******* SUCCESS: ALL  Requests done ************");
@@ -304,21 +370,29 @@ void loop() {
 
         case ESP_SEND_ERROR_MSG:
             CPL("************* ERROR *******");
+            CPL(global_error_msg);
             CPL("Shutdown Calendar and Reboot.....");
+            RTC_WakeUpRead();
+            rtcWakeUp.b_wake_up_after_error = true;
+            RTC_WakeUpWrite();
+
             delay(500);
-            swSer.write(CMD_SHUTDOWN_CALENDAR);
+            WriteCommandToCalendar(CMD_SHUTDOWN_CALENDAR);
             delay(500);
             digitalWrite(PIN_POWER_CAL, LOW);
             delay(500);
             digitalWrite(PIN_POWER_CAL, HIGH);
-            delay(1000);
+            delay(3000);
 
             WriteCommandToCalendar(CMD_SHOW_ERROR_MSG);
-            WriteToCalendar(error_msg);
-            delay(500);
+            WriteToCalendar(global_error_msg);
+            delay(1000);
+            WriteCommandToCalendar(CMD_SHUTDOWN_CALENDAR);
+            delay(1000);
             digitalWrite(PIN_POWER_CAL, LOW);
+            CPL("By!");
             delay(500);
-            MyDeepSleep(0, RF_NO_CAL);
+            ESP.deepSleep(0, RF_NO_CAL);
             delay(1500);
             break;
 

@@ -146,11 +146,13 @@ uint32_t calculateCRC32(const uint8_t *data, size_t length) {
 
 
 void RTC_OAuthWrite() {
+    DPL("RTC_OAuthWrite-Start");
     rtcOAuth.crc32 = calculateCRC32(((uint8_t *) &rtcOAuth) + 4, sizeof(rtcOAuth) - 4);
 
     uint addr = 0;
     EEPROM.put(addr, rtcOAuth);
     EEPROM.commit();
+    DPL("RTC_OAuthWrite-End");
 }
 
 
@@ -271,14 +273,16 @@ int SerialKeyWait() {// Wait for Key
 void ErrorToDisplay (char * my_error_msg) {
     char str_time[22];
 
-    strftime(str_time, sizeof(str_time), "%Y %m %d %H:%M:%S", &global_time);
+    strftime(str_time, sizeof(str_time), "%d%m%y%H%M", &global_time);
 
     ssize_t bufsz = snprintf(NULL, 0,
-                             "ERROR (%s): %s", str_time, my_error_msg);
+                             "%s:%s", str_time, my_error_msg);
 
-    error_msg = (char *) malloc(bufsz + 1);
-    sprintf(error_msg,
-            "ERROR (%s): %s", str_time, my_error_msg);
+    global_error_msg = (char *) malloc(bufsz + 1);
+    memset(global_error_msg,0,bufsz+1);
+
+    sprintf(global_error_msg,
+            "%s:%s", str_time, my_error_msg);
 
     CP("ERROR MESSAGE to Calender:");
     CPL(my_error_msg);

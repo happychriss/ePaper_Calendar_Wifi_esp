@@ -76,8 +76,8 @@
 struct rtcDataOauthStruct {
     uint32_t crc32;   // 4 bytes
     uint8_t status;
-    char device_code[120];  // 1 byte,   5 in total
-    char refresh_token[100];
+    char device_code[1024];  // 1 byte,   5 in total, old 120
+    char refresh_token[1024]; // Refresh tokens: 512 bytes, old 100
 
 };
 
@@ -85,6 +85,7 @@ struct rtcDataWakeupStruct {
     uint32_t crc32;   // 4 bytes
     uint8_t wakeup_count;
     uint16_t remaining_sleep_min;
+    bool b_wake_up_after_error;
 };
 
 

@@ -7,8 +7,10 @@
 #include "HardwareSerial.cpp"
 
 #define USING_AXTLS
+
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecureAxTLS.h>
+
 using namespace axTLS;
 
 #include "cacert.h"
@@ -16,19 +18,21 @@ using namespace axTLS;
 #include "ArduinoJson.h"
 #include "main_esp8266_wifi.h"
 #include "oauth.h"
+#include "support.h"
 
 // #include <CertStoreBearSSL.h>
 
 // OAUTH2 Client credentials
-static const  String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
-static const  String scope = "https://www.googleapis.com/auth/calendar.readonly";
+static const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
+static const String scope = "https://www.googleapis.com/auth/calendar.readonly";
 //const String scope = "https://www.googleapis.com/auth/calendar";
-static const  String auth_uri = "https://accounts.google.com/o/oauth2/auth";
-static const  String code_uri = "https://accounts.google.com/o/oauth2/device/code";
+static const String auth_uri = "https://accounts.google.com/o/oauth2/auth";
+static const String code_uri = "https://accounts.google.com/o/oauth2/device/code";
 static const String info_uri = "/oauth2/v3/tokeninfo";
 static const String token_uri = "/oauth2/v4/token";
 static const char *host = "www.googleapis.com";
 const static int httpsPort = 443;
+
 
 
 bool SetupMyWifi(const char *ssid, const char *password) {
@@ -37,7 +41,7 @@ bool SetupMyWifi(const char *ssid, const char *password) {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 
-    uint16_t try_count = 500;
+    uint16_t try_count = 100;
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
@@ -53,7 +57,10 @@ bool SetupMyWifi(const char *ssid, const char *password) {
     }
 
     CPL("");
-    CP("WiFi connected with IP address:");CPL(WiFi.localIP());
+    CP("WiFi connected with IP address:");
+    CPL(WiFi.localIP());
+
+
     return false;
 }
 
@@ -82,6 +89,7 @@ void SetupTimeSNTP(tm *timeinfo) {
 
 
 }
+
 
 // Root certificate used by google at  https://pki.goog/
 // Only works with RSA 2048, SHA-1  https://pki.goog/gsr2/GSR2.crt, expires   15.12.2021
@@ -113,13 +121,193 @@ void SetCertificates(WiFiClientSecure client) {
     DPL("Set Certificates");
 }
 
+bool CheckCertifcates() {
+    WiFiClientSecure client;
+
+    if (!client.connect(host, httpsPort)) {
+        ErrorToDisplay("CheckCertificate: Connection failed");
+        return true;
+    }
+
+    SetCertificates(client);
+    if (!client.verifyCertChain(host)) {
+        ErrorToDisplay("Certificates dont match!");
+        return true;
+    }
+
+    DPL("Certifcates match");
+
+    return false;
+}
+
+bool sendHttpRequest(WiFiClientSecure client, const String request) {
+
+    DPL("sendHttpRequest");
+
+    size_t res=client.print(request);
+    DP("Request->");DP(request);DP("<- Size:");DPL(res);
+    DP("Request sent, checking response with heap:");CPL(ESP.getFreeHeap());
+
+    return true;
+}
+
+String readHttpRequest(WiFiClientSecure client, bool b_swser) {
+
+    DPL("readHttpRequest");
+    // Reading Headers ****************************
+    String str_header;
+    uint32 length = 0;
+    bool b_chunked = false;
+    long http_code = 0;
+    String result="";
+
+    while (true) {
+        str_header = client.readStringUntil('\n');
+//        DP("->");DP(str_header);DPL("<-");
+
+        if (str_header.indexOf("Transfer-Encoding: chunked") != -1) {
+            b_chunked = true;
+            DPL("Header: Found Chunked");
+        }
+
+        if (str_header.indexOf("Content-Length:") != -1) {
+            length = str_header.substring(str_header.indexOf(":") + 1).toDouble();
+            DP("Header: Found Length:");
+            DPL(length);
+        }
+
+        if (str_header.indexOf("HTTP/1") != -1) {
+            http_code = str_header.substring(str_header.indexOf(" ") + 1, str_header.indexOf(" ") + 4).toInt();
+            DP("Header: HTTP-Status:");
+            DPL(http_code);
+        }
+
+        if (str_header == "\r") {
+            Serial.println("DONE: headers received");
+            break;
+        }
+    }
+
+    if (http_code == 0) {
+        result = "CN_ERROR: No HTTP/1 Found in Header!";
+        DPL(result);
+        return result;
+
+    }
+
+    if ((http_code != 200) && (http_code != 428)) {
+        result = "CN_ERROR -  HTTP:" + String(http_code);
+        DPL(result);
+        return result;
+    }
+
+
+    DPL("******** Receiving Data :");
+
+    if (b_chunked) {
+        DPL("*** Chunked Reading ***");
+        while (true) {
+            String line = client.readStringUntil('\r\n');
+            DP("Chunk-Len:");
+            DP(line);
+            DPL("<-");
+
+            char chr_line[20];
+            line.toCharArray(chr_line, 20);
+            long len = strtol(chr_line, NULL, 16);
+            DP("Chunk-Len LongInt:");
+            DPL(len);
+            DP("BUFFER->");
+            if (len != 0) {
+
+                if (!b_swser) {
+                    char *my_buffer = (char *) malloc(len + 1);
+                    memset(my_buffer, 0, len + 1);
+                    client.readBytes(my_buffer, len);
+                    DP(my_buffer);
+                    result = result + String(my_buffer);
+                    free(my_buffer);
+                } else {
+                    char my_buffer[1];
+                    for (uint32 i = 0; i < len; i++) {
+                        client.readBytes(my_buffer, 1);
+                        swSer.write(my_buffer[0]);
+                        DP(my_buffer[0]);
+                    }
+                    uint8_t v = 0;
+                    swSer.write(v);
+                }
+                client.readStringUntil('\r\n');
+            } else {
+                break;
+            }
+            DPL("<-BUFFER");
+
+        }
+    } else if (length != 0) {
+        DPL("*** Content-Length Reading ***");
+        DP("BUFFER->");
+        if (!b_swser) {
+            char *my_buffer = (char *) malloc(length + 1);
+            memset(my_buffer, 0, length + 1);
+            client.readBytes(my_buffer, length);
+            result = String(my_buffer);
+            DP(result);
+        } else {
+            char my_buffer[1];
+            for (uint32 i = 0; i < length; i++) {
+                client.readBytes(my_buffer, 1);
+                swSer.write(my_buffer[0]);
+                DP(my_buffer[0]);
+            }
+            uint8_t v = 0;
+            swSer.write(v);
+        }
+        DPL("<-BUFFER");
+
+
+    } else {
+        DPL("*** Connected Reading (most slow) ***");
+        DP("BUFFER->");
+        if (!b_swser) {
+            while (client.connected()) {
+                String line = client.readStringUntil('\r');
+                DP(line);
+                result += line;
+            }
+        } else {
+
+            char buffer[1];
+            size_t b;
+
+            while (true) {
+                b = client.readBytesUntil('\r', buffer, (size_t) 1);
+                DP(buffer[0]);
+                if (b == 1) {
+                    swSer.write((uint8_t) buffer[0]);
+                } else {
+                    uint8_t v = 0;
+                    swSer.write(v);
+                    break;
+                }
+            }
+        }
+        DPL("<-BUFFER");
+    }
+
+    DPL("closing connection");
+    client.stop();
+
+    return result;
+
+}
+
 
 bool calendarGetRequest(char *request) {
 
     bool result = false;
 
-    CP("calenderGetRequest, heap is: "); CPL(ESP.getFreeHeap());
-
+    CP("calenderGetRequest, heap is: ");CPL(ESP.getFreeHeap());
 
     ssize_t bufsz = snprintf(NULL, 0,
                              "GET %saccess_token=%s HTTP/1.1\r\nHost: www.googleapis.com:443\r\nConnection: close\r\n\r\n\r\n",
@@ -134,64 +322,32 @@ bool calendarGetRequest(char *request) {
 
     DPL(full_request);
 
-
-    WiFiClientSecure client;
     // Use WiFiClientSecure class to create TLS connection
 
+    WiFiClientSecure client;
+
     if (!client.connect(host, httpsPort)) {
-        DPL("connection failed");
-        return result;
+        ErrorToDisplay("CalGetRequest: Connection failed");
+        return false;
     }
 
-    CP("Check Certificate, heap is: ");CPL(ESP.getFreeHeap());
-    SetCertificates(client);
-    if (client.verifyCertChain(host)) {
-        DPL("certificate matches");
-        client.print(full_request);
-        DP("request sent, checking response with heap:");CPL(ESP.getFreeHeap());
+    //*** Send Request to Google to get calendar information, error message is done in the function
+    if (!sendHttpRequest(client, full_request) ) return false;
 
-        if (!client.find("HTTP/1.1 ")) return false;
+    //*** Write to calendar and  Check Response *************************************************
+    String res = readHttpRequest(client, true);
 
-        String status_code = client.readStringUntil('\r');
-        DP("Status code: ");
-        DPL(status_code);
-        if (status_code != "200 OK") {
-            DPL("There was an error");
-            return false;
-        }
-
-        if (!client.find("\r\n\r\n")) return false;
-
-        DPL("Data:");
-
-
-#define READ_LENGTH 1
-
-        char buffer[1];
-        size_t b;
-
-        while (true) {
-            b = client.readBytesUntil('\r', buffer, (size_t) READ_LENGTH);
-            DP(buffer[0]);
-            if (b == READ_LENGTH) {
-                swSer.write((uint8_t) buffer[0]);
-            } else {
-                uint8_t v = 0;
-                swSer.write(v);
-                break;
-            }
-        }
-
-        result = true;
-
-        DPL("closing connection with heap:"); CPL(ESP.getFreeHeap());
-        client.stop();
-        return result;
-    } else {
-        DPL("certificate doesn't match");
+    if (res.indexOf("CN_ERROR") != -1) {
+        char tmp_err[150] = {0};
+        res = "CalGetReq-Send:" + res;
+        res.toCharArray(tmp_err, res.length()+1);
+        ErrorToDisplay(tmp_err);
+        return false;
     }
-    return false;
 
+    client.stop();
+
+    return true;
 }
 
 
@@ -260,27 +416,24 @@ String getRequest(const char *server, String request) {
 
 String postRequest(const char *server, String header, String data) {
 
-    WiFiClientSecure client;
-    delay(100);
-
     DP("Function: ");
     DPL("postRequest()");
 
 
+    WiFiClientSecure client;
     String result = "";
+
+    if (int res = !client.connect(server, httpsPort)) {
+        DPL("connection failed with result");
+        DPL(res);
+        return result;
+    }
 
     // Use WiFiClientSecure class to create TLS connection
 
     DP("Connecting to: ");
     DPL(server);
 
-    if (int res = !client.connect(server, httpsPort)) {
-
-        DPL("connection failed with result");
-        DPL(res);
-
-        return result;
-    }
 
     SetCertificates(client);
     if (client.verifyCertChain(server)) {
@@ -291,32 +444,57 @@ String postRequest(const char *server, String header, String data) {
 
         client.print(header + data);
 
-
         DPL("request sent");
         DPL("Receiving response");
-
-
+        // Reading Headers ****************************
         while (client.connected()) {
-            if (client.find("HTTP/1.1 ")) {
-                String status_code = client.readStringUntil('\r');
-                DP("Status code: ");
-                DPL(status_code);
-                if ((status_code != "200 OK") && (status_code != "428 Precondition Required")) {
-                    DPL("There was an error");
-                    break;
-                }
-            }
-            if (client.find("\r\n\r\n")) {
-                DPL("Data:");
-            }
-            String line = client.readStringUntil('\r');
+            DP(".");
+            String line = client.readStringUntil('\n');
             DPL(line);
-            result += line;
+            if (line == "\r") {
+                Serial.println("headers received");
+                break;
+            }
         }
+//            String line = client.readStringUntil('\n');
+
+        // Reading Body (chunked)  ****************************
+        // https://en.wikipedia.org/wiki/Chunked_transfer_encoding
+
+        while (true) {
+            String line = client.readStringUntil('\r\n');
+            DP("Chunk-Len:");
+            DP(line);
+            DPL("<-");
+
+            char chr_line[20];
+            line.toCharArray(chr_line, 20);
+            long len = strtol(chr_line, NULL, 16);
+            DP("Chunk-Len LongInt:");
+            DPL(len);
+
+            if (len != 0) {
+                char *my_buffer = (char *) malloc(len + 1);
+                memset(my_buffer, 0, len + 1);
+                client.readBytes(my_buffer, len);
+                DP("BUFFER->");
+                DP(my_buffer);
+                DPL("<-BUFFER");
+                result = result + String(my_buffer);
+                free(my_buffer);
+                client.readStringUntil('\r\n');
+            } else {
+                break;
+            }
+
+        }
+        DP("->");
+        DP(result);
+        DPL("<-");
 
         DPL("closing connection");
         client.stop();
-        return result;
+
     } else {
         DPL("certificate doesn't match");
     }
@@ -325,13 +503,12 @@ String postRequest(const char *server, String header, String data) {
 
 
 uint8_t request_access_token() {
-    DP("Function: ");
     DPL("request_access_token");
 
     uint8_t my_status = CAL_PAINT_UPDATE;
 
     String postData = "";
-    postData += "&client_id=" + client_id;
+    postData += "client_id=" + client_id;
     postData += "&refresh_token=" + String(rtcOAuth.refresh_token);
     postData += "&client_secret=1Ta9KtGVZbDb0D1WicO5kz9G";
     postData += "&grant_type=refresh_token";
@@ -339,14 +516,33 @@ uint8_t request_access_token() {
     String postHeader = "";
     postHeader += ("POST " + token_uri + " HTTP/1.1\r\n");
     postHeader += ("Host: " + String(host) + ":" + String(httpsPort) + "\r\n");
-    postHeader += ("Connection: close\r\n");
+    postHeader += ("Accept: */*\r\n");
     postHeader += ("Content-Type: application/x-www-form-urlencoded\r\n");
     postHeader += ("Content-Length: ");
     postHeader += (postData.length());
     postHeader += ("\r\n\r\n");
 
-    String json = postRequest(host, postHeader, postData);
-    const size_t bufferSize = JSON_OBJECT_SIZE(5) + 230;
+    WiFiClientSecure client;
+
+    if (!client.connect(host, httpsPort)) {
+        ErrorToDisplay("Req.Acc.Token: Connection failed");
+        return ESP_SEND_ERROR_MSG;
+    }
+
+    //*** Send Request to Google to get calendar information, error message is done in the function
+    if (!sendHttpRequest(client, postHeader+postData) ) return ESP_SEND_ERROR_MSG;
+
+    String json = readHttpRequest(client,false);
+
+    if (json.indexOf("CN_ERROR") != -1) {
+        char tmp_err[100] = {0};
+        json = "RequestToken:" + json;
+        json.toCharArray(tmp_err,json.length()+1);
+        ErrorToDisplay(tmp_err);
+        return ESP_SEND_ERROR_MSG;
+    }
+
+    const size_t bufferSize = JSON_OBJECT_SIZE(5) + 1024;
     DynamicJsonDocument jsonBuffer(bufferSize);
 //    JsonObject &root = jsonBuffer.parseObject(json);
     deserializeJson(jsonBuffer, json);
@@ -356,19 +552,17 @@ uint8_t request_access_token() {
 
         DPL("Refreshing Access Token");
         const char *local_access_token = root["access_token"];
-        global_access_token=(char *) calloc(sizeof(char),strlen(local_access_token)+1);
+        global_access_token = (char *) calloc(sizeof(char), strlen(local_access_token) + 1);
         memcpy(global_access_token, local_access_token, strlen(local_access_token));
-
 
     } else {
 
-        DP("Access Token Refresh Error");
-        const char *error_description = root["error_description"];
-        DPL(error_description);
-        my_status = CAL_PAINT_DONE;
+        DPL("Access Token Refresh Error");
+        ErrorToDisplay("Access Token Refresh");
+        my_status = ESP_SEND_ERROR_MSG;
 
     }
-
+    client.stop();
     return my_status;
 }
 
@@ -394,7 +588,7 @@ uint8_t poll_authorization_server() {
     postHeader += (postData.length());
     postHeader += ("\r\n\r\n");
 
-    const size_t bufferSize = JSON_OBJECT_SIZE(5) + 230;
+    const size_t bufferSize = JSON_OBJECT_SIZE(5) + 1024;
     DynamicJsonDocument jsonBuffer(bufferSize);
 
     String json;
@@ -402,28 +596,54 @@ uint8_t poll_authorization_server() {
     uint8_t my_status = WIFI_AWAIT_CHALLENGE;
     uint8_t try_count = 0;
 
-#define MAX_TRY_COUNT 3
+    WiFiClientSecure client;
+
+#define MAX_TRY_COUNT 6
 
     do {
 
-        DP("Polling for authorization server, try #: ");DP(try_count);DP(" of ");DPL(MAX_TRY_COUNT);
+        DP("Polling for authorization server, try #: ");
+        DP(try_count);
+        DP(" of ");
+        DPL(MAX_TRY_COUNT);
 
-        json = postRequest(host, postHeader, postData);
+        if (!client.connect(host, httpsPort)) {
+            ErrorToDisplay("PollServer: Connection failed");
+            return ESP_SEND_ERROR_MSG;
+        }
+
+        //*** Send Request to Google to get calendar information, error message is done in the function
+        size_t res=client.print(postHeader+postData);
+        DP("Request->");DP(postHeader+postData);DP("<- Size:");DPL(res);
+
+        json = readHttpRequest(client,false);
+
+        if (json.indexOf("CN_ERROR") != -1) {
+            char tmp_err[100] = {0};
+            json = "PollAuthorization:" + json;
+            json.toCharArray(tmp_err,json.length()+1);
+            ErrorToDisplay(tmp_err);
+            return ESP_SEND_ERROR_MSG;
+        }
 
         deserializeJson(jsonBuffer, json);
         JsonObject root = jsonBuffer.as<JsonObject>();
 
-
         if (root.containsKey("access_token")) {
 
-            DPL("Getting Token");
-
-            DPL("Refreshing Access Token");
             const char *local_access_token = root["access_token"];
-            global_access_token=(char *) calloc(sizeof(char),strlen(local_access_token)+1);
+
+            const char *refresh_token;
+            if(root.containsKey("refresh_token")) {
+                DPL("Found Refresh Token");
+               refresh_token = root["refresh_token"];
+            } else {
+                ErrorToDisplay("PollServer: RefreshToken");
+                return ESP_SEND_ERROR_MSG;
+            }
+            global_access_token = (char *) calloc(sizeof(char), strlen(local_access_token) + 1);
             memcpy(global_access_token, local_access_token, strlen(local_access_token));
 
-            const char *refresh_token = root["refresh_token"];
 
             // Update RTC with Refresh Token
             rtcOAuth.status = WIFI_CHECK_ACCESS_TOKEN;
@@ -432,34 +652,35 @@ uint8_t poll_authorization_server() {
             RTC_OAuthWrite();
 
             DPL("**** RESULTS in Strings *****");
-            DPL(device_code);
-            DPL(local_access_token);
-            DPL(refresh_token);
+            DP("Device Code:");DPL(device_code);
+            DP("Access Token:");DPL(local_access_token);
+            DP("Refresh Token:");DPL(refresh_token);
 
             my_status = WIFI_CHECK_ACCESS_TOKEN;
+            client.stop();
 
         } else {
-
+            client.stop();
             DP("Getting WAIT/ERROR: ");
             const char *error_description = root["error_description"];
             DPL(error_description);
             try_count++;
-            delay(5000);
-
+            delay(30000);
         }
+
+
 
     } while (my_status == WIFI_AWAIT_CHALLENGE and try_count < MAX_TRY_COUNT);
 
     // Did not work...need to re-initialise device
     if (my_status == WIFI_AWAIT_CHALLENGE) {
 
-        my_status = WIFI_INITIAL_STATE;
-
         DPL("Challenge failed - Restart Initialization");
-
         memset(&rtcOAuth, 0, sizeof(rtcOAuth));
-        rtcOAuth.status = my_status;
+        rtcOAuth.status = WIFI_INITIAL_STATE;
         RTC_OAuthWrite();
+        ErrorToDisplay("User Code not entered!");
+        return ESP_SEND_ERROR_MSG;
     }
 
     return my_status;
@@ -486,9 +707,27 @@ const char *request_user_and_device_code() {
     postHeader += (postData.length());
     postHeader += ("\r\n\r\n");
 
-    String json = postRequest(host, postHeader, postData);
-    const size_t bufferSize = JSON_OBJECT_SIZE(5) + 230;
+    WiFiClientSecure client;
 
+    if (!client.connect(host, httpsPort)) {
+        ErrorToDisplay("Req.Device.Code: Connection failed");
+        return 0;
+    }
+
+    //*** Send Request to Google to get calendar information, error message is done in the function
+    if (!sendHttpRequest(client, postHeader+postData) ) return 0;
+
+    String json = readHttpRequest(client,false);
+
+    if (json.indexOf("CN_ERROR") != -1) {
+        char tmp_err[100] = {0};
+        json = "Req.Device.Code:" + json;
+        json.toCharArray(tmp_err,json.length()+1);
+        ErrorToDisplay(tmp_err);
+        return 0;
+    }
+
+    const size_t bufferSize = JSON_OBJECT_SIZE(5) + 1024;
 
     DynamicJsonDocument jsonBuffer(bufferSize);
     deserializeJson(jsonBuffer, json);
@@ -506,7 +745,7 @@ const char *request_user_and_device_code() {
     memset(rtcOAuth.device_code, 0, sizeof(rtcOAuth.device_code));
     memcpy(rtcOAuth.device_code, device_code, strlen(device_code));
     RTC_OAuthWrite();
-
+    client.stop();
     return user_code;
 
 }
