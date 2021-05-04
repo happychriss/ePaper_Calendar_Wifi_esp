@@ -270,7 +270,7 @@ int SerialKeyWait() {// Wait for Key
 
 }
 
-void ErrorToDisplay (char * my_error_msg) {
+void ErrorToDisplay (const char *my_error_msg) {
     char str_time[22];
 
     strftime(str_time, sizeof(str_time), "%d%m%y%H%M", &global_time);

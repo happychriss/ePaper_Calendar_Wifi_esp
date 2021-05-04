@@ -23,8 +23,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef softser_old_h
 #define softser_old_h
 
-#include "../../../../.platformio/packages/framework-arduinoespressif8266@2.20402.4/tools/sdk/libc/xtensa-lx106-elf/include/inttypes.h"
-#include "../../../../.platformio/packages/framework-arduinoespressif8266@2.20402.4/cores/esp8266/Stream.h"
+#include "inttypes.h"
+#include "Stream.h"
 
 
 // This class is compatible with the corresponding AVR one,

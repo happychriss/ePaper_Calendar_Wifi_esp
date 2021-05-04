@@ -2,7 +2,8 @@
 
 #include <ESP8266WiFi.h>
 //#include <WiFiClientSecureBearSSL.h>
-#include <WiFiClientSecureAxTLS.h> // force use of AxTLS (BearSSL is now default)
+//#include <WiFiClientSecureAxTLS.h> // force use of AxTLS (BearSSL is now default)
+#include <WiFiClientSecure.h>
 #include "string"
 #include "main_esp8266_wifi.h"
 #include "time.h"
@@ -26,6 +27,9 @@ char my_pwd[20] = {0};
 char str_global_time[22];
 char *global_access_token;
 char *global_error_msg;
+
+BearSSL::WiFiClientSecure client;
+BearSSL::Session session;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored  "-Wdeprecated-declarations"
@@ -74,8 +78,12 @@ void setup() {
         b_reset_authorization = true;
     }
 #endif
-    global_status = WAKE_UP_FROM_SLEEP; // normal operations
+#if defined(MYDEBUG)
 //    global_status = CAL_QUICK_INIT; // debugging
+    global_status = WAKE_UP_FROM_SLEEP; // normal operations
+#else
+    global_status = WAKE_UP_FROM_SLEEP; // normal operations
+#endif
 }
 
 
@@ -83,19 +91,16 @@ void loop() {
     char ssid[20] = {0};
     char pwd[20] = {0};
 
-    // ESP.deepSleep(0);
-
     CP("******************* State:");
     CPD(global_status);
     CPL(" *****");
-
 
     bool b_send_ok = false;
 
     switch (global_status) {
 
         case CAL_QUICK_INIT:
-            CPL("** QUICK INIT **");
+            CPL("****** QUICK INIT ******");
 
             memset(rtcOAuth.refresh_token, 0, sizeof(rtcOAuth.refresh_token));
 
@@ -112,14 +117,17 @@ void loop() {
 
             CPL("Calendar I am awake!");
 
-            SetupMyWifi("Alice-WLANXP", "fabneu7167");
+            SetupMyWifi("Alice-WLANXP", "xxxxx");
 
-            if (CheckCertifcates()) {
+            SetupTimeSNTP(&global_time);
+
+            client.setSession(&session);
+            if (set_ssl_client_certificates(&client, "Could not connect client with SSL")) {
+                CPL("******* ERROR: SSL Connection *******");
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
             }
-
-            SetupTimeSNTP(&global_time);
+            client.stop();
 
             BLINK(3);
 
@@ -221,12 +229,15 @@ void loop() {
                 break;
             }
 
-            if (CheckCertifcates()) {
+            SetupTimeSNTP(&global_time);
+
+            client.setSession(&session);
+            if (set_ssl_client_certificates(&client, "Could not connect client with SSL")) {
+                CPL("******* ERROR: SSL Connection *******");
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
             }
-
-            SetupTimeSNTP(&global_time);
+            client.stop();
 
             BLINK(3);
 
@@ -260,7 +271,7 @@ void loop() {
         case WIFI_INITIAL_STATE:
 
             const char *user_code;
-            user_code = request_user_and_device_code();
+            user_code = request_user_and_device_code(&client);
 
             if (user_code == 0) {
                 CPL("Error Get UserCode");
@@ -285,12 +296,12 @@ void loop() {
         case WIFI_AWAIT_CHALLENGE:
             CP("Await challenge for Device:");
             CPL(rtcOAuth.device_code);
-            global_status = poll_authorization_server();
+            global_status = poll_authorization_server(&client);
             break;
 
         case WIFI_CHECK_ACCESS_TOKEN:
-            CPL("Refresh Access Token");
-            global_status = request_access_token();
+            CPL("Request Access Token");
+            global_status = request_access_token(&client);
             break;
 
 
@@ -313,12 +324,13 @@ void loop() {
                 // Read the Google Calendar URL from STM32, request to Goolge and send back to STM32
                 char request[250] = {0};
                 ReadSWSer(request);
-                b_send_ok = calendarGetRequest(request);
+                b_send_ok = calendarGetRequest(&client,request);
                 if (!b_send_ok) break;
                 CPL("******* SUCCESS: Calendar Update *******");
 //                break;
 
             }
+            client.stop();
 
             if (!b_send_ok) {
                 CPL("******* ERROR: Calendar Update *******");

@@ -33,9 +33,10 @@
 #define MAX_SLEEP_MIN 70 // minuntes as max-sleep (*US2MIN = 60000000)
 
 /**** Debug options *******/
-//#define MYDEBUG
-//#define MYDEBUG_CORE
-//#define WAIT_SERIAL
+#undef MYDEBUG
+#undef MYDEBUG_CORE
+#undef WAIT_SERIAL
+
 #define SHOW_BLINK
 
 #define TIME_ZONE -6
