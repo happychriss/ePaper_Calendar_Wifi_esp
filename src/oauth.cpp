@@ -7,12 +7,30 @@
 #include "HardwareSerial.cpp"
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
-#include "gtsr1.h"
-#include <time.h>
+#include "google_root_ca_r2.h"
 #include "ArduinoJson.h"
 #include "main_esp8266_wifi.h"
 #include "oauth.h"
 #include "support.h"
+
+
+#include <coredecls.h>                  // settimeofday_cb()
+#include <Schedule.h>
+#include <PolledTimeout.h>
+
+
+#include <time.h>                       // time() ctime()
+#include <sys/time.h>                   // struct timeval
+
+#include <sntp.h>                       // sntp_servermode_dhcp()
+
+#define TZ_Europe_Berlin	PSTR("CET-1CEST,M3.5.0,M10.5.0/3")
+// for testing purpose:
+extern "C" int clock_gettime(clockid_t unused, struct timespec *tp);
+
+
+#include <sntp.h>                       // sntp_servermode_dhcp()
+
 
 // OAUTH2 Client credentials
 static const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
@@ -26,24 +44,48 @@ static const char *host = "www.googleapis.com";
 const static int httpsPort = 443;
 
 
+//***********************************************************************
+
+static timeval tv;
+static timespec tp;
+static time_t now;
+static uint32_t now_ms, now_us;
+
+static esp8266::polledTimeout::periodicMs showTimeNow(60000);
+
+#define PTM(w) \
+  Serial.print(" " #w "="); \
+  Serial.print(tm->tm_##w);
+
+void printTm(const char* what, const tm* tm) {
+    Serial.print(what);
+    PTM(isdst); PTM(yday); PTM(wday);
+    PTM(year);  PTM(mon);  PTM(mday);
+    PTM(hour);  PTM(min);  PTM(sec);
+}
+
+
+//***********************************************************************
+
+
 bool SetupMyWifi(const char *ssid, const char *password) {
     CP("Connecting to: ");
     CPL(ssid);
 
-#ifdef MYDEBUG_CORE
-
-    int numberOfNetworks = WiFi.scanNetworks();
-
-    for (int i = 0; i < numberOfNetworks; i++) {
-
-        Serial.print("Network name: ");
-        Serial.println(WiFi.SSID(i));
-        Serial.print("Signal strength: ");
-        Serial.println(WiFi.RSSI(i));
-        Serial.println("-----------------------");
-
-    }
-#endif
+//#ifdef MYDEBUG_CORE
+//
+//    int numberOfNetworks = WiFi.scanNetworks();
+//
+//    for (int i = 0; i < numberOfNetworks; i++) {
+//
+//        Serial.print("Network name: ");
+//        Serial.println(WiFi.SSID(i));
+//        Serial.print("Signal strength: ");
+//        Serial.println(WiFi.RSSI(i));
+//        Serial.println("-----------------------");
+//
+//    }
+//#endif
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -75,20 +117,20 @@ bool SetupMyWifi(const char *ssid, const char *password) {
 void SetupTimeSNTP(tm *timeinfo) {
     // Synchronize time useing SNTP. This is necessary to verify that
 // the TLS certificates offered by the server are currently valid.
+#define RTC_UTC_TEST 1510592825 // 1510592825 = Monday 13 November 2017 17:07:05 UTC
 
-    CPL("Setting time using SNTP");
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-
+    configTime(TZ_Europe_Berlin, "pool.ntp.org","ptbtime1.ptb.de","ptbtime2.ptb.de.");
+//    configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     time_t now = time(nullptr);
     while (now < 8 * 3600 * 2) {
         delay(500);
-        DP(".");
+        DP("W");
         now = time(nullptr);
     }
     DPL("");
 
     gmtime_r(&now, timeinfo);
-    timeinfo->tm_hour = timeinfo->tm_hour + TIME_ZONE;
+    timeinfo->tm_hour = timeinfo->tm_hour +1;
     mktime(timeinfo);
 
     CP("*** Current time: ");
@@ -99,7 +141,7 @@ void SetupTimeSNTP(tm *timeinfo) {
 
 
 bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client, char const *my_error_msg) {
-    BearSSL::X509List cert(gtsr1_pem, gtsr1_pem_len);
+    BearSSL::X509List cert(root_ca_r2, root_ca_r2_len);
     client->setTrustAnchors(&cert);
 
     if (!client->connect(host, httpsPort)) {
@@ -321,6 +363,7 @@ bool calendarGetRequest(WiFiClientSecure *client, char *request) {
     return true;
 }
 
+/*
 
 
 String postRequest(const char *server, String header, String data) {
@@ -397,6 +440,7 @@ String postRequest(const char *server, String header, String data) {
 
     return result;
 }
+*/
 
 
 uint8_t request_access_token(WiFiClientSecure *client) {

@@ -79,8 +79,8 @@ void setup() {
     }
 #endif
 #if defined(MYDEBUG)
-//    global_status = CAL_QUICK_INIT; // debugging
-    global_status = WAKE_UP_FROM_SLEEP; // normal operations
+    global_status = CAL_QUICK_INIT; // debugging
+//    global_status = WAKE_UP_FROM_SLEEP; // normal operations
 #else
     global_status = WAKE_UP_FROM_SLEEP; // normal operations
 #endif
@@ -117,7 +117,7 @@ void loop() {
 
             CPL("Calendar I am awake!");
 
-            SetupMyWifi("Alice-WLANXP", "xxxxx");
+            SetupMyWifi("Alice-WLANXP", "xxxx");
 
             SetupTimeSNTP(&global_time);
 
@@ -229,10 +229,11 @@ void loop() {
                 break;
             }
 
+
             SetupTimeSNTP(&global_time);
 
             client.setSession(&session);
-            if (set_ssl_client_certificates(&client, "Could not connect client with SSL")) {
+            if (set_ssl_client_certificates(&client, "Could not connect client via SSL")) {
                 CPL("******* ERROR: SSL Connection *******");
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
