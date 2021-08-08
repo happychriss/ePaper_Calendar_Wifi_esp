@@ -32,7 +32,7 @@ int SerialKeyWait();
 extern const char *request_user_and_device_code(WiFiClientSecure *client);
 uint8_t poll_authorization_server(WiFiClientSecure *client);
 bool CheckCertifcates();
-bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client, char const *my_error_msg);
+bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client);
 
 bool calendarGetRequest(WiFiClientSecure *client, char *request);
 bool CheckRTC();

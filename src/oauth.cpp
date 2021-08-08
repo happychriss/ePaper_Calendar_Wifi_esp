@@ -7,7 +7,7 @@
 #include "HardwareSerial.cpp"
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
-#include "google_root_ca_r2.h"
+#include "google_root_ca.h"
 #include "ArduinoJson.h"
 #include "main_esp8266_wifi.h"
 #include "oauth.h"
@@ -25,12 +25,6 @@
 #include <sntp.h>                       // sntp_servermode_dhcp()
 
 #define TZ_Europe_Berlin	PSTR("CET-1CEST,M3.5.0,M10.5.0/3")
-// for testing purpose:
-extern "C" int clock_gettime(clockid_t unused, struct timespec *tp);
-
-
-#include <sntp.h>                       // sntp_servermode_dhcp()
-
 
 // OAUTH2 Client credentials
 static const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
@@ -43,29 +37,6 @@ static const String token_uri = "/oauth2/v4/token";
 static const char *host = "www.googleapis.com";
 const static int httpsPort = 443;
 
-
-//***********************************************************************
-
-static timeval tv;
-static timespec tp;
-static time_t now;
-static uint32_t now_ms, now_us;
-
-static esp8266::polledTimeout::periodicMs showTimeNow(60000);
-
-#define PTM(w) \
-  Serial.print(" " #w "="); \
-  Serial.print(tm->tm_##w);
-
-void printTm(const char* what, const tm* tm) {
-    Serial.print(what);
-    PTM(isdst); PTM(yday); PTM(wday);
-    PTM(year);  PTM(mon);  PTM(mday);
-    PTM(hour);  PTM(min);  PTM(sec);
-}
-
-
-//***********************************************************************
 
 
 bool SetupMyWifi(const char *ssid, const char *password) {
@@ -140,12 +111,15 @@ void SetupTimeSNTP(tm *timeinfo) {
 }
 
 
-bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client, char const *my_error_msg) {
-    BearSSL::X509List cert(root_ca_r2, root_ca_r2_len);
+bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client) {
+    BearSSL::X509List cert(root_ca);
     client->setTrustAnchors(&cert);
 
     if (!client->connect(host, httpsPort)) {
-        ErrorToDisplay(my_error_msg);
+        char buffer[90]={0};
+        client->getLastSSLError(buffer,89);
+        DP("SSL-Error:");DPL(buffer);
+        ErrorToDisplay(buffer);
         return true;
     }
     DP("Connected to: ");

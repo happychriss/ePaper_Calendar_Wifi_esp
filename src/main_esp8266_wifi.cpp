@@ -117,12 +117,12 @@ void loop() {
 
             CPL("Calendar I am awake!");
 
-            SetupMyWifi("Alice-WLANXP", "xxxx");
+            SetupMyWifi("Alice-WLANXP-CHANGE_PWD", "xxxx");
 
             SetupTimeSNTP(&global_time);
 
             client.setSession(&session);
-            if (set_ssl_client_certificates(&client, "Could not connect client with SSL")) {
+            if (set_ssl_client_certificates(&client)) {
                 CPL("******* ERROR: SSL Connection *******");
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
@@ -233,7 +233,7 @@ void loop() {
             SetupTimeSNTP(&global_time);
 
             client.setSession(&session);
-            if (set_ssl_client_certificates(&client, "Could not connect client via SSL")) {
+            if (set_ssl_client_certificates(&client)) {
                 CPL("******* ERROR: SSL Connection *******");
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
