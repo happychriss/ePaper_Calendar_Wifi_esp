@@ -117,7 +117,7 @@ void loop() {
 
             CPL("Calendar I am awake!");
 
-            SetupMyWifi("Alice-WLANXP-CHANGE_PWD", "xxxx");
+            SetupMyWifi("Example", "pwd");
 
             SetupTimeSNTP(&global_time);
 

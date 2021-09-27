@@ -24,7 +24,7 @@
 
 #include <sntp.h>                       // sntp_servermode_dhcp()
 
-#define TZ_Europe_Berlin	PSTR("CET-1CEST,M3.5.0,M10.5.0/3")
+#define TZ_Europe_Berlin    PSTR("CET-1CEST,M3.5.0,M10.5.0/3")
 
 // OAUTH2 Client credentials
 static const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
@@ -36,7 +36,6 @@ static const String info_uri = "/oauth2/v3/tokeninfo";
 static const String token_uri = "/oauth2/v4/token";
 static const char *host = "www.googleapis.com";
 const static int httpsPort = 443;
-
 
 
 bool SetupMyWifi(const char *ssid, const char *password) {
@@ -90,7 +89,7 @@ void SetupTimeSNTP(tm *timeinfo) {
 // the TLS certificates offered by the server are currently valid.
 #define RTC_UTC_TEST 1510592825 // 1510592825 = Monday 13 November 2017 17:07:05 UTC
 
-    configTime(TZ_Europe_Berlin, "pool.ntp.org","ptbtime1.ptb.de","ptbtime2.ptb.de.");
+    configTime(TZ_Europe_Berlin, "pool.ntp.org", "ptbtime1.ptb.de", "ptbtime2.ptb.de.");
 //    configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     time_t now = time(nullptr);
     while (now < 8 * 3600 * 2) {
@@ -101,7 +100,7 @@ void SetupTimeSNTP(tm *timeinfo) {
     DPL("");
 
     gmtime_r(&now, timeinfo);
-    timeinfo->tm_hour = timeinfo->tm_hour +1;
+    timeinfo->tm_hour = timeinfo->tm_hour + 1;
     mktime(timeinfo);
 
     CP("*** Current time: ");
@@ -114,14 +113,16 @@ void SetupTimeSNTP(tm *timeinfo) {
 bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client) {
     BearSSL::X509List cert(root_ca);
     client->setTrustAnchors(&cert);
-
+    DPL("Trust Anchor set - now connecting...");
     if (!client->connect(host, httpsPort)) {
-        char buffer[90]={0};
-        client->getLastSSLError(buffer,89);
-        DP("SSL-Error:");DPL(buffer);
+        char buffer[90] = {0};
+        client->getLastSSLError(buffer, 89);
+        DP("SSL-Error: ");
+        DPL(buffer);
         ErrorToDisplay(buffer);
         return true;
     }
+
     DP("Connected to: ");
     DPL(host);
     client->stop();
@@ -509,7 +510,6 @@ uint8_t poll_authorization_server(WiFiClientSecure *client) {
 
     uint8_t my_status = WIFI_AWAIT_CHALLENGE;
     uint8_t try_count = 0;
-
 
 
 #define MAX_TRY_COUNT 15

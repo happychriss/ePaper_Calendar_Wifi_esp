@@ -5,7 +5,10 @@
 #ifndef ESP8266_WIFI_GOOGLE_ROOT_CA_H
 #define ESP8266_WIFI_GOOGLE_ROOT_CA_H
 
-// GTS Root R1, valid until 2036-06-22
+// To update: echo | openssl s_client -showcerts -servername googleapis.com -connect googleapis.com:443 2>/dev/null | openssl x509 -inform pem -noout -text
+// http://www.certificate.fyicenter.com/11696_GTS_CA_1C3_Certificate-8A747FAF85CDEE95CD3D9CD0E24614F371351D27.html
+// results into: GTS Root R1 ,until 2027 valid
+
 static const char root_ca[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIFVzCCAz+gAwIBAgINAgPlk28xsBNJiGuiFzANBgkqhkiG9w0BAQwFADBHMQsw
@@ -37,7 +40,7 @@ Z6tGn6D/Qqc6f1zLXbBwHSs09dR2CQzreExZBfMzQsNhFRAbd03OIozUhfJFfbdT
 0E6yove+7u7Y/9waLd64NnHi/Hm3lCXRSHNboTXns5lndcEZOitHTtNCjv0xyBZm
 2tIMPNuzjsmhDYAPexZ3FL//2wmUspO8IFgV6dtxQ/PeEMMA3KgqlbbC1j+Qa3bb
 bP6MvPJwNQzcmRk13NfIRmPVNnGuV/u3gm3c
------END CERTIFICATE----
+-----END CERTIFICATE-----
 )EOF";
 
 
