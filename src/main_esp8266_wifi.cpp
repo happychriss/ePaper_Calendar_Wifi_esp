@@ -79,8 +79,8 @@ void setup() {
     }
 #endif
 #if defined(MYDEBUG)
-    global_status = CAL_QUICK_INIT; // debugging
-//    global_status = WAKE_UP_FROM_SLEEP; // normal operations
+//    global_status = CAL_QUICK_INIT; // debugging
+    global_status = WAKE_UP_FROM_SLEEP; // normal operations
 #else
     global_status = WAKE_UP_FROM_SLEEP; // normal operations
 #endif
@@ -91,11 +91,11 @@ void loop() {
     char ssid[20] = {0};
     char pwd[20] = {0};
 
-    CP("******************* State:");
+    CP("*********** State:");
     CPD(global_status);
     CPL(" *****");
 
-    bool b_send_ok = false;
+    int res_get_request = CAL_PAINT_DONE;
 
     switch (global_status) {
 
@@ -117,13 +117,13 @@ void loop() {
 
             CPL("Calendar I am awake!");
 
-            SetupMyWifi("Example", "pwd");
+            SetupMyWifi("Alice-WLANXP", "fabneu7167");
 
             SetupTimeSNTP(&global_time);
 
             client.setSession(&session);
             if (set_ssl_client_certificates(&client)) {
-                CPL("******* ERROR: SSL Connection *******");
+                CPL("*** ERROR: SSL Connection ***");
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
             }
@@ -133,13 +133,11 @@ void loop() {
 
             if (RTC_OAuthRead() && !b_reset_authorization) {
                 CPL("** OAUTH RTC Status");
-                CP("Status: ");
-                CPL(rtcOAuth.status);
                 CP("Device-Code: ");
                 CPL(rtcOAuth.device_code);
                 CP("Refresh-Token: ");
                 CPL(rtcOAuth.refresh_token);
-                global_status = WIFI_CHECK_ACCESS_TOKEN;
+                global_status = OAUTH_REQUEST_ACCESS_TOKEN;
             } else {
                 global_status = WIFI_INITIAL_STATE;
             }
@@ -151,10 +149,17 @@ void loop() {
             if (RTC_WakeUpRead()) {
 
                 if (rtcWakeUp.b_wake_up_after_error) {
+                    if (rtcWakeUp.b_oauth_error) {
+                        b_reset_authorization = true;
+                        CPL("DeepSleep DONE - Wakeup after OAUTH error");
+
+                    } else {
+                        CPL("DeepSleep DONE - Wakeup after normal error");
+                        b_reset_authorization = false;
+                    }
+
                     global_status = CAL_WAKEUP;
-                    rtcWakeUp.b_wake_up_after_error = false;
-                    RTC_WakeUpWrite();
-                    CPL("DeepSleep DONE - Wakeup after error");
+
                     BLINK(5);
 
                 } else if (rtcWakeUp.wakeup_count > 1) {
@@ -176,10 +181,10 @@ void loop() {
                     CPL("DeepSleep DONE - Start Calendar Flow");
                 }
 
-
             } else {
                 global_status = CAL_WAKEUP;
-                CPL("DeepSleep *** No Valid RTC found - Start Calendar Flow **");
+                b_reset_authorization = true;
+                CPL("DeepSleep *** No Valid Wakeup RTC found - Start Init Sequence **");
             }
 
             break;
@@ -234,7 +239,7 @@ void loop() {
 
             client.setSession(&session);
             if (set_ssl_client_certificates(&client)) {
-                CPL("******* ERROR: SSL Connection *******");
+                CPL("*** ERROR: SSL Connection ***");
                 global_status = ESP_SEND_ERROR_MSG;
                 break;
             }
@@ -244,20 +249,17 @@ void loop() {
 
             if (RTC_OAuthRead()) {
                 CPL("** OAUTH RTC Status");
-                CP("Status: ");
-                CPL(rtcOAuth.status);
                 CP("Device-Code: ");
                 CPL(rtcOAuth.device_code);
                 CP("Refresh-Token: ");
                 CPL(rtcOAuth.refresh_token);
 
-                RTC_WakeUpRead();
-
-                if (b_reset_authorization ) {
+                if (b_reset_authorization) {
                     CPL("*Reset Google User access - set initial state*");
                     global_status = WIFI_INITIAL_STATE;
                 } else {
-                    global_status = rtcOAuth.status;
+                    CPL("*Normal Wakeup- set initial state*");
+                    global_status = OAUTH_REQUEST_ACCESS_TOKEN;
                 }
 
             } else {
@@ -267,7 +269,7 @@ void loop() {
 
             break;
 
-//********************************************************************************************
+//****************************************
 
         case WIFI_INITIAL_STATE:
 
@@ -276,7 +278,7 @@ void loop() {
 
             if (user_code == 0) {
                 CPL("Error Get UserCode");
-                global_status = ESP_SEND_ERROR_MSG;
+                global_status = ESP_OAUTH_ERROR;
                 break;
             }
 
@@ -286,33 +288,33 @@ void loop() {
             WriteCommandToCalendar(CMD_SHOW_USERCODE_CALENDAR);
             WriteToCalendar(my_user_code);
 
-            CPL("*********************");
+            CPL("*********");
             CP("USER-CODE:  ");
             CPL(user_code);
-            CP("*********************");
+            CP("*********");
 
-            global_status = WIFI_AWAIT_CHALLENGE;
+            global_status = OAUTH_AWAIT_CHALLENGE;
             break;
 
-        case WIFI_AWAIT_CHALLENGE:
+        case OAUTH_AWAIT_CHALLENGE:
             CP("Await challenge for Device:");
             CPL(rtcOAuth.device_code);
             global_status = poll_authorization_server(&client);
             break;
 
-        case WIFI_CHECK_ACCESS_TOKEN:
+        case OAUTH_REQUEST_ACCESS_TOKEN:
             CPL("Request Access Token");
             global_status = request_access_token(&client);
             break;
 
-
+            // this is the standard status of the calendar in case of no error - no need to write anything into RTC memory - set after successful access token
         case CAL_PAINT_UPDATE:
 
             strftime(str_global_time, sizeof(str_global_time), "%Y %m %d %H:%M:%S", &global_time);
             WriteCommandToCalendar(CMD_READ_CALENDAR);
             WriteToCalendar(str_global_time);
 
-            CP("******* Request Calendar Update with time-stamp:");
+            CP("*** Request Calendar Update with time-stamp:");
             CPL(str_global_time);
 
             while (true) {
@@ -325,20 +327,18 @@ void loop() {
                 // Read the Google Calendar URL from STM32, request to Goolge and send back to STM32
                 char request[250] = {0};
                 ReadSWSer(request);
-                b_send_ok = calendarGetRequest(&client,request);
-                if (!b_send_ok) break;
-                CPL("******* SUCCESS: Calendar Update *******");
-//                break;
+                res_get_request = calendarGetRequest(&client, request);
+                if (res_get_request != CAL_PAINT_DONE) break;
+                CPL("*** SUCCESS: Calendar Update ***");
 
             }
             client.stop();
+            global_status = res_get_request;
 
-            if (!b_send_ok) {
-                CPL("******* ERROR: Calendar Update *******");
-                global_status = ESP_SEND_ERROR_MSG;
+            if (res_get_request != CAL_PAINT_DONE) {
+                CPL("*** ERROR: Calendar Update ***");
             } else {
-                CPL("******* SUCCESS: ALL  Requests done ************");
-                global_status = CAL_PAINT_DONE;
+                CPL("*** SUCCESS: ALL  Requests done *****");
             }
 
             break;
@@ -352,6 +352,12 @@ void loop() {
             break;
 
         case ESP_START_SLEEP:
+
+            // All went well, lets reset our errors
+            RTC_WakeUpRead();
+            rtcWakeUp.b_wake_up_after_error = false;
+            rtcWakeUp.b_oauth_error = false;
+            RTC_WakeUpWrite();
 
             CP("*** PREPARE DEEP SLEEP with Warp-Factor: ");
             CP(WARP_FACTOR);
@@ -381,12 +387,23 @@ void loop() {
 
             break;
 
+
+        case ESP_OAUTH_ERROR:
         case ESP_SEND_ERROR_MSG:
-            CPL("************* ERROR *******");
+            CPL("********* ERROR ***");
             CPL(global_error_msg);
             CPL("Shutdown Calendar and Reboot.....");
+
             RTC_WakeUpRead();
             rtcWakeUp.b_wake_up_after_error = true;
+
+            if (global_status == ESP_OAUTH_ERROR) {
+                CPL("OAUTH_ERROR ***");
+                rtcWakeUp.b_oauth_error = true;
+            } else {
+                rtcWakeUp.b_oauth_error = false;
+            }
+
             RTC_WakeUpWrite();
 
             delay(500);

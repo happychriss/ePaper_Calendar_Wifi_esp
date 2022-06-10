@@ -34,7 +34,7 @@ uint8_t poll_authorization_server(WiFiClientSecure *client);
 bool CheckCertifcates();
 bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client);
 
-bool calendarGetRequest(WiFiClientSecure *client, char *request);
+int calendarGetRequest(WiFiClientSecure *client, char *request);
 bool CheckRTC();
 
 #endif //ESP8266_WIFI_OAUTH_H

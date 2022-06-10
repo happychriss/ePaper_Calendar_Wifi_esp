@@ -27,7 +27,9 @@
 #define TZ_Europe_Berlin    PSTR("CET-1CEST,M3.5.0,M10.5.0/3")
 
 // OAUTH2 Client credentials
-static const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
+//static const String client_id = "88058113591-7ek2km1rt9gsjhlpb9fuckhl8kpnllce.apps.googleusercontent.com";
+static const String client_id = "445456429713-r61th17fpmr66qmf87kgp2qa16q0ide7.apps.googleusercontent.com";
+static const String client_secret = "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";
 static const String scope = "https://www.googleapis.com/auth/calendar.readonly";
 //const String scope = "https://www.googleapis.com/auth/calendar";
 static const String auth_uri = "https://accounts.google.com/o/oauth2/auth";
@@ -294,7 +296,7 @@ String readHttpRequest(WiFiClientSecure *client, bool b_swser) {
 }
 
 
-bool calendarGetRequest(WiFiClientSecure *client, char *request) {
+int calendarGetRequest(WiFiClientSecure *client, char *request) {
 
     bool result = false;
 
@@ -317,7 +319,7 @@ bool calendarGetRequest(WiFiClientSecure *client, char *request) {
 
     if (!client->connect(host, httpsPort)) {
         ErrorToDisplay("Calendar Get Request - Connect Error");
-        return false;
+        return ESP_SEND_ERROR_MSG;
     }
     //*** Send Request to Google to get calendar information, error message is done in the function
     if (!sendHttpRequest(client, full_request)) return false;
@@ -332,10 +334,10 @@ bool calendarGetRequest(WiFiClientSecure *client, char *request) {
         res = "CalGetReq-Send:" + res;
         res.toCharArray(tmp_err, res.length() + 1);
         ErrorToDisplay(tmp_err);
-        return false;
+        return ESP_OAUTH_ERROR;
     }
 
-    return true;
+    return CAL_PAINT_DONE;
 }
 
 /*
@@ -426,7 +428,7 @@ uint8_t request_access_token(WiFiClientSecure *client) {
     String postData = "";
     postData += "client_id=" + client_id;
     postData += "&refresh_token=" + String(rtcOAuth.refresh_token);
-    postData += "&client_secret=1Ta9KtGVZbDb0D1WicO5kz9G";
+    postData += "&client_secret=" + client_secret;
     postData += "&grant_type=refresh_token";
 
     String postHeader = "";
@@ -455,7 +457,7 @@ uint8_t request_access_token(WiFiClientSecure *client) {
         json = "RequestToken:" + json;
         json.toCharArray(tmp_err, json.length() + 1);
         ErrorToDisplay(tmp_err);
-        return ESP_SEND_ERROR_MSG;
+        return ESP_OAUTH_ERROR;
     }
 
     const size_t bufferSize = JSON_OBJECT_SIZE(5) + 1024;
@@ -490,7 +492,7 @@ uint8_t poll_authorization_server(WiFiClientSecure *client) {
 
     String postData = "";
     postData += "&client_id=" + client_id;
-    postData += "&client_secret=1Ta9KtGVZbDb0D1WicO5kz9G";
+    postData += "&client_secret=" + client_secret;
     postData += "&code=" + device_code;
     postData += "&grant_type=http://oauth.net/grant_type/device/1.0";
 
@@ -508,7 +510,7 @@ uint8_t poll_authorization_server(WiFiClientSecure *client) {
 
     String json;
 
-    uint8_t my_status = WIFI_AWAIT_CHALLENGE;
+    uint8_t my_status = OAUTH_AWAIT_CHALLENGE;
     uint8_t try_count = 0;
 
 
@@ -542,7 +544,7 @@ uint8_t poll_authorization_server(WiFiClientSecure *client) {
             json = "PollAuthorization:" + json;
             json.toCharArray(tmp_err, json.length() + 1);
             ErrorToDisplay(tmp_err);
-            return ESP_SEND_ERROR_MSG;
+            return ESP_OAUTH_ERROR;
         }
 
         deserializeJson(jsonBuffer, json);
@@ -558,14 +560,13 @@ uint8_t poll_authorization_server(WiFiClientSecure *client) {
                 refresh_token = root["refresh_token"];
             } else {
                 ErrorToDisplay("PollServer: RefreshToken");
-                return ESP_SEND_ERROR_MSG;
+                return ESP_OAUTH_ERROR;
             }
             global_access_token = (char *) calloc(sizeof(char), strlen(local_access_token) + 1);
             memcpy(global_access_token, local_access_token, strlen(local_access_token));
 
 
             // Update RTC with Refresh Token
-            rtcOAuth.status = WIFI_CHECK_ACCESS_TOKEN;
             memset(rtcOAuth.refresh_token, 0, sizeof(rtcOAuth.refresh_token));
             memcpy(rtcOAuth.refresh_token, refresh_token, strlen(refresh_token));
             RTC_OAuthWrite();
@@ -578,7 +579,7 @@ uint8_t poll_authorization_server(WiFiClientSecure *client) {
             DP("Refresh Token:");
             DPL(refresh_token);
 
-            my_status = WIFI_CHECK_ACCESS_TOKEN;
+            my_status = OAUTH_REQUEST_ACCESS_TOKEN;
 
         } else {
             DP("Getting WAIT/ERROR: ");
@@ -589,17 +590,16 @@ uint8_t poll_authorization_server(WiFiClientSecure *client) {
         }
 
 
-    } while (my_status == WIFI_AWAIT_CHALLENGE and try_count < MAX_TRY_COUNT);
+    } while (my_status == OAUTH_AWAIT_CHALLENGE and try_count < MAX_TRY_COUNT);
 
     // Did not work...need to re-initialise device
-    if (my_status == WIFI_AWAIT_CHALLENGE) {
+    if (my_status == OAUTH_AWAIT_CHALLENGE) {
 
         DPL("Challenge failed - Restart Initialization");
         memset(&rtcOAuth, 0, sizeof(rtcOAuth));
-        rtcOAuth.status = WIFI_INITIAL_STATE;
         RTC_OAuthWrite();
         ErrorToDisplay("User Code not entered!");
-        return ESP_SEND_ERROR_MSG;
+        return ESP_OAUTH_ERROR;
     }
 
     return my_status;
@@ -659,7 +659,6 @@ const char *request_user_and_device_code(WiFiClientSecure *client) {
     DP("User Code: ");
     DPL(user_code);
 
-    rtcOAuth.status = WIFI_AWAIT_CHALLENGE;
     memset(rtcOAuth.device_code, 0, sizeof(rtcOAuth.device_code));
     memcpy(rtcOAuth.device_code, device_code, strlen(device_code));
     RTC_OAuthWrite();

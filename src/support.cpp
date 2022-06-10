@@ -159,7 +159,7 @@ void RTC_OAuthWrite() {
 void RTC_WakeUpWrite() {
     rtcWakeUp.crc32 = calculateCRC32(((uint8_t *) &rtcWakeUp) + 4, sizeof(rtcWakeUp) - 4);
 
-    uint addr = sizeof(rtcOAuth)+1;
+    uint addr = sizeof(rtcOAuth)+1; //not nice - address from wake-up is based on length of oauth structure
     EEPROM.put(addr, rtcWakeUp);
     EEPROM.commit();
 }
@@ -175,7 +175,6 @@ bool RTC_OAuthRead() {
     if (crc == rtcOAuth.crc32) {
         rtcValid = true;
         DPL("RTC: OAuth-Read - Valid RTC");
-        DPL(crc);
 
     } else {
         memset(&rtcOAuth, 0, sizeof(rtcDataOauthStruct));
@@ -183,7 +182,6 @@ bool RTC_OAuthRead() {
     }
 
     return rtcValid;
-
 
 }
 
@@ -210,7 +208,7 @@ bool CheckRTC() {
 
 
 bool RTC_WakeUpRead() {
-    uint addr = sizeof(rtcDataOauthStruct)+1; //just take next place in EEPROM
+    uint addr = sizeof(rtcOAuth)+1; //not nice - address from wake-up is based on length of oauth structure
 
     EEPROM.get(addr, rtcWakeUp);
     bool rtcValid = false;
