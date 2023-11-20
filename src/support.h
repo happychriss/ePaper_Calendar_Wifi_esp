@@ -28,3 +28,4 @@ extern char * global_error_msg;
 void ErrorToDisplay (const char *my_error_msg);
 extern tm global_time;
 #endif //ESP8266_WIFI_SUPPORT_H
+void waitAndPrint(const char* message);

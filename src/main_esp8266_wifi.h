@@ -56,10 +56,12 @@
 #define DP(x)     Serial.print (x)
 #define DPD(x)     Serial.print (x, DEC)
 #define DPL(x)  Serial.println (x)
+#define DPW(x)     waitAndPrint (x)
 #else
 #define DP(x)
 #define DPD(x)
 #define DPL(x)
+#define DPW(x)
 #endif
 
 
@@ -72,6 +74,7 @@
 #define CPD(x)
 #define CPL(x)
 #endif
+
 
 
 struct rtcDataOauthStruct {

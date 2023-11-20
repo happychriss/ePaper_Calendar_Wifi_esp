@@ -12,6 +12,7 @@
 #include "cal_comm.h"
 #include <support.h>
 #include "oauth.h"
+#include "google_root_ca.h"
 
 // to get serial working: disconnect serial, press reset and shortly afterwards connect serial
 
@@ -28,8 +29,10 @@ char str_global_time[22];
 char *global_access_token;
 char *global_error_msg;
 
+// https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/bearssl-client-secure-class.html
 BearSSL::WiFiClientSecure client;
 BearSSL::Session session;
+BearSSL::X509List cert(root_ca);
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored  "-Wdeprecated-declarations"
@@ -88,8 +91,8 @@ void setup() {
 
 
 void loop() {
-    char ssid[20] = {0};
-    char pwd[20] = {0};
+//    char ssid[20] = {0};
+//    char pwd[20] = {0};
 
     CP("*********** State:");
     CPD(global_status);

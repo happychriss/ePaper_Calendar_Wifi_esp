@@ -38,6 +38,7 @@ static const String info_uri = "/oauth2/v3/tokeninfo";
 static const String token_uri = "/oauth2/v4/token";
 static const char *host = "www.googleapis.com";
 const static int httpsPort = 443;
+extern BearSSL::X509List cert;
 
 
 bool SetupMyWifi(const char *ssid, const char *password) {
@@ -113,7 +114,7 @@ void SetupTimeSNTP(tm *timeinfo) {
 
 
 bool set_ssl_client_certificates(BearSSL::WiFiClientSecure *client) {
-    BearSSL::X509List cert(root_ca);
+//    BearSSL::X509List cert(root_ca);
     client->setTrustAnchors(&cert);
     DPL("Trust Anchor set - now connecting...");
     if (!client->connect(host, httpsPort)) {
@@ -422,14 +423,21 @@ String postRequest(const char *server, String header, String data) {
 
 uint8_t request_access_token(WiFiClientSecure *client) {
     DPL("request_access_token");
-
     uint8_t my_status = CAL_PAINT_UPDATE;
+
+
+    if (!client->connect(host, httpsPort)) {
+        DPL("connect error");
+        ErrorToDisplay("Request Access Token - Connect Error");
+        return ESP_SEND_ERROR_MSG;
+    }
 
     String postData = "";
     postData += "client_id=" + client_id;
     postData += "&refresh_token=" + String(rtcOAuth.refresh_token);
     postData += "&client_secret=" + client_secret;
     postData += "&grant_type=refresh_token";
+
 
     String postHeader = "";
     postHeader += ("POST " + token_uri + " HTTP/1.1\r\n");
@@ -440,15 +448,13 @@ uint8_t request_access_token(WiFiClientSecure *client) {
     postHeader += (postData.length());
     postHeader += ("\r\n\r\n");
 
-    if (!client->connect(host, httpsPort)) {
-        ErrorToDisplay("Request Access Token - Connect Error");
-        return ESP_SEND_ERROR_MSG;
-    }
 
     //*** Send Request to Google to get calendar information, error message is done in the function
     if (!sendHttpRequest(client, postHeader + postData)) return ESP_SEND_ERROR_MSG;
 
+
     String json = readHttpRequest(client, false);
+
 
     client->stop();
 
@@ -460,10 +466,12 @@ uint8_t request_access_token(WiFiClientSecure *client) {
         return ESP_OAUTH_ERROR;
     }
 
+
     const size_t bufferSize = JSON_OBJECT_SIZE(5) + 1024;
     DynamicJsonDocument jsonBuffer(bufferSize);
 //    JsonObject &root = jsonBuffer.parseObject(json);
     deserializeJson(jsonBuffer, json);
+
     JsonObject root = jsonBuffer.as<JsonObject>();
 
     if (root.containsKey("access_token")) {
